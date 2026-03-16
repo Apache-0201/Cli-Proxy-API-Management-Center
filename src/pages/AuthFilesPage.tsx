@@ -18,6 +18,7 @@ import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer'
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -48,7 +49,12 @@ import { useAuthFilesOauth } from '@/features/authFiles/hooks/useAuthFilesOauth'
 import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAuthFilesPrefixProxyEditor';
 import { useAuthFilesStats } from '@/features/authFiles/hooks/useAuthFilesStats';
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
-import { readAuthFilesUiState, writeAuthFilesUiState } from '@/features/authFiles/uiState';
+import {
+  isAuthFilesSortMode,
+  readAuthFilesUiState,
+  writeAuthFilesUiState,
+  type AuthFilesSortMode,
+} from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, type CodexCleanupEvent } from '@/services/api/authFiles';
 import type { AuthFileItem } from '@/types';
@@ -77,7 +83,7 @@ export function AuthFilesPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
-  const [sortMode, setSortMode] = useState<'default' | 'az' | 'priority'>('default');
+  const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
@@ -190,11 +196,14 @@ export function AuthFilesPage() {
     if (typeof persisted.pageSize === 'number' && Number.isFinite(persisted.pageSize)) {
       setPageSize(clampCardPageSize(persisted.pageSize));
     }
+    if (isAuthFilesSortMode(persisted.sortMode)) {
+      setSortMode(persisted.sortMode);
+    }
   }, []);
 
   useEffect(() => {
-    writeAuthFilesUiState({ filter, problemOnly, search, page, pageSize });
-  }, [filter, problemOnly, search, page, pageSize]);
+    writeAuthFilesUiState({ filter, problemOnly, search, page, pageSize, sortMode });
+  }, [filter, problemOnly, search, page, pageSize, sortMode]);
 
   useEffect(() => {
     setPageSizeInput(String(pageSize));
@@ -235,6 +244,16 @@ export function AuthFilesPage() {
     setPageSize(rounded);
     setPage(1);
   };
+
+  const handleSortModeChange = useCallback(
+    (value: string) => {
+      if (!isAuthFilesSortMode(value) || value === sortMode) return;
+      setSortMode(value);
+      setPage(1);
+      void loadFiles().catch(() => {});
+    },
+    [loadFiles, sortMode]
+  );
 
   const handleHeaderRefresh = useCallback(async () => {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
@@ -328,6 +347,15 @@ export function AuthFilesPage() {
   const filesMatchingProblemFilter = useMemo(
     () => (problemOnly ? files.filter(hasAuthFileStatusMessage) : files),
     [files, problemOnly]
+  );
+
+  const sortOptions = useMemo(
+    () => [
+      { value: 'default', label: t('auth_files.sort_default') },
+      { value: 'az', label: t('auth_files.sort_az') },
+      { value: 'priority', label: t('auth_files.sort_priority') },
+    ],
+    [t]
   );
 
   const typeCounts = useMemo(() => {
@@ -658,18 +686,14 @@ export function AuthFilesPage() {
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.sort_label')}</label>
-              <select
+              <Select
                 className={styles.sortSelect}
                 value={sortMode}
-                onChange={(e) => {
-                  setSortMode(e.target.value as 'default' | 'az' | 'priority');
-                  setPage(1);
-                }}
-              >
-                <option value="default">{t('auth_files.sort_default')}</option>
-                <option value="az">{t('auth_files.sort_az')}</option>
-                <option value="priority">{t('auth_files.sort_priority')}</option>
-              </select>
+                options={sortOptions}
+                onChange={handleSortModeChange}
+                ariaLabel={t('auth_files.sort_label')}
+                fullWidth={false}
+              />
             </div>
             <div className={`${styles.filterItem} ${styles.filterToggleItem}`}>
               <label>{t('auth_files.problem_filter_label')}</label>
