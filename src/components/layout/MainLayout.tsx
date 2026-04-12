@@ -474,7 +474,6 @@ export function MainLayout() {
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),
-    { path: '/system', label: t('nav.system_info'), icon: sidebarIcons.system },
     { path: '/monitor', label: t('nav.monitor'), icon: sidebarIcons.monitor },
   ];
   const navOrder = navItems.map((item) => item.path);
@@ -553,39 +552,6 @@ export function MainLayout() {
     showNotification(t('notification.data_refreshed'), 'success');
   };
 
-  const handleVersionCheck = async () => {
-    setCheckingVersion(true);
-    try {
-      const data = await versionApi.checkLatest();
-      const latestRaw = data?.['latest-version'] ?? data?.latest_version ?? data?.latest ?? '';
-      const latest = typeof latestRaw === 'string' ? latestRaw : String(latestRaw ?? '');
-      const comparison = compareVersions(latest, serverVersion);
-
-      if (!latest) {
-        showNotification(t('system_info.version_check_error'), 'error');
-        return;
-      }
-
-      if (comparison === null) {
-        showNotification(t('system_info.version_current_missing'), 'warning');
-        return;
-      }
-
-      if (comparison > 0) {
-        showNotification(t('system_info.version_update_available', { version: latest }), 'warning');
-      } else {
-        showNotification(t('system_info.version_is_latest'), 'success');
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-      const suffix = message ? `: ${message}` : '';
-      showNotification(`${t('system_info.version_check_error')}${suffix}`, 'error');
-    } finally {
-      setCheckingVersion(false);
-    }
-  };
-
   return (
     <div className="app-shell">
       <header className="main-header" ref={headerRef}>
@@ -642,15 +608,6 @@ export function MainLayout() {
               title={t('header.refresh_all')}
             >
               {headerIcons.refresh}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleVersionCheck}
-              loading={checkingVersion}
-              title={t('system_info.version_check_button')}
-            >
-              {headerIcons.update}
             </Button>
             <div
               className={`language-menu ${languageMenuOpen ? 'open' : ''}`}

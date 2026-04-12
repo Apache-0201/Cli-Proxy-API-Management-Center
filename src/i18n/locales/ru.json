@@ -114,8 +114,7 @@
     "oauth": "OAuth вход",
     "quota_management": "Управление квотами",
     "config_management": "Панель конфигурации",
-    "logs": "Просмотр логов",
-    "system_info": "Информация системы"
+    "logs": "Просмотр логов"
   },
   "dashboard": {
     "title": "Панель управления",
@@ -670,7 +669,7 @@
     "credit_label": "Google One AI кредиты",
     "credit_amount": "{{count}} кредитов"
   },
-"kiro_quota": {
+  "kiro_quota": {
     "title": "Квота Kiro",
     "empty_title": "Файлы авторизации Kiro отсутствуют",
     "empty_desc": "Загрузите учётные данные Kiro, чтобы увидеть оставшуюся квоту.",

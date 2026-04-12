@@ -115,7 +115,6 @@
     "quota_management": "配额管理",
     "config_management": "配置面板",
     "logs": "日志查看",
-    "system_info": "中心信息",
     "monitor": "监控中心"
   },
   "dashboard": {

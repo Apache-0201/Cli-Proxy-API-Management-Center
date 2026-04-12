@@ -115,7 +115,6 @@
     "quota_management": "Quota Management",
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
-    "system_info": "Management Center Info",
     "monitor": "Monitor Center"
   },
   "dashboard": {
@@ -673,7 +672,7 @@
     "credit_label": "Google One AI Credits",
     "credit_amount": "{{count}} credits"
   },
-"kiro_quota": {
+  "kiro_quota": {
     "title": "Kiro Quota",
     "empty_title": "No Kiro Auth Files",
     "empty_desc": "Upload a Kiro credential to view remaining quota.",
