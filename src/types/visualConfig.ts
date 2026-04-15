@@ -61,7 +61,7 @@ export type VisualConfigValues = {
   rmDisableControlPanel: boolean;
   rmPanelRepo: string;
   authDir: string;
-  apiKeysText: string;
+  apiKeyEntries: ProxyApiKeyEntry[];
   debug: boolean;
   commercialMode: boolean;
   loggingToFile: boolean;
@@ -81,6 +81,12 @@ export type VisualConfigValues = {
   streaming: StreamingConfig;
 };
 
+export type ProxyApiKeyEntry = {
+  id: string;
+  key: string;
+  name: string;
+};
+
 export const makeClientId = () => {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -97,7 +103,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   rmDisableControlPanel: false,
   rmPanelRepo: '',
   authDir: '',
-  apiKeysText: '',
+  apiKeyEntries: [],
   debug: false,
   commercialMode: false,
   loggingToFile: false,

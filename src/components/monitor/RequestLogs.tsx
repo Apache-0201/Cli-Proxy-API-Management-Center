@@ -26,6 +26,7 @@ interface RequestLogsProps {
   providerTypeMap: Record<string, string>;
   apiFilter: string;
   authIndexMap: Record<string, string>;
+  apiKeyNameMap?: Record<string, string>;
 }
 
 interface LogEntry {
@@ -57,6 +58,7 @@ export function RequestLogs({
   providerTypeMap,
   apiFilter,
   authIndexMap,
+  apiKeyNameMap = {},
 }: RequestLogsProps) {
   const { t } = useTranslation();
   const [filterApi, setFilterApi] = useState('');
@@ -291,10 +293,21 @@ export function RequestLogs({
       ? authIndexMap[entry.authIndex] || entry.authIndex
       : '-';
 
+    const apiKeyName = apiKeyNameMap[entry.apiKey];
+
     return (
       <>
         <td title={authDisplayName}>{authDisplayName}</td>
-        <td title={entry.apiKey}>{maskSecret(entry.apiKey)}</td>
+        <td title={entry.apiKey}>
+          {apiKeyName ? (
+            <>
+              <span className={styles.channelName}>{apiKeyName}</span>
+              <span className={styles.channelSecret}> ({maskSecret(entry.apiKey)})</span>
+            </>
+          ) : (
+            maskSecret(entry.apiKey)
+          )}
+        </td>
         <td>{entry.providerType}</td>
         <td title={entry.model}>{entry.model}</td>
         <td title={entry.source}>

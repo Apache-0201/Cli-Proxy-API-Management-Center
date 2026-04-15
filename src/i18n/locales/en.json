@@ -1206,7 +1206,9 @@
         "input_placeholder": "Paste your API key",
         "input_hint": "This only modifies the local config file content, it will not sync to the API Key Management interface",
         "error_empty": "Please enter an API key",
-        "error_invalid": "API key contains invalid characters"
+        "error_invalid": "API key contains invalid characters",
+        "name_label": "Name",
+        "name_placeholder": "Enter key owner name (optional)"
       },
       "payload_rules": {
         "rule": "Rule",

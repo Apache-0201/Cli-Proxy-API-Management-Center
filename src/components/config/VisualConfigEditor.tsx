@@ -5,6 +5,7 @@ import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import type {
+  ProxyApiKeyEntry,
   PayloadFilterRule,
   PayloadParamValidationErrorCode,
   PayloadRule,
@@ -107,7 +108,10 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
     validationErrors?.['streaming.nonstreamKeepaliveInterval']
   );
 
-  const handleApiKeysTextChange = useCallback((apiKeysText: string) => onChange({ apiKeysText }), [onChange]);
+  const handleApiKeyEntriesChange = useCallback(
+    (apiKeyEntries: ProxyApiKeyEntry[]) => onChange({ apiKeyEntries }),
+    [onChange]
+  );
   const handlePayloadDefaultRulesChange = useCallback(
     (payloadDefaultRules: PayloadRule[]) => onChange({ payloadDefaultRules }),
     [onChange]
@@ -224,9 +228,9 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
             hint={t('config_management.visual.sections.auth.auth_dir_hint')}
           />
           <ApiKeysCardEditor
-            value={values.apiKeysText}
+            value={values.apiKeyEntries}
             disabled={disabled}
-            onChange={handleApiKeysTextChange}
+            onChange={handleApiKeyEntriesChange}
           />
         </div>
       </ConfigSection>

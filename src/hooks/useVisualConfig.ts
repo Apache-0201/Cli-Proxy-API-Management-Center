@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { isMap, parse as parseYaml, parseDocument } from 'yaml';
 import type {
+  ProxyApiKeyEntry,
   PayloadFilterRule,
   PayloadParamEntry,
   PayloadParamValueType,
@@ -9,7 +10,7 @@ import type {
   VisualConfigValidationErrors,
   PayloadParamValidationErrorCode,
 } from '@/types/visualConfig';
-import { DEFAULT_VISUAL_VALUES } from '@/types/visualConfig';
+import { DEFAULT_VISUAL_VALUES, makeClientId } from '@/types/visualConfig';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -36,15 +37,24 @@ function extractApiKeyValue(raw: unknown): string | null {
   return null;
 }
 
-function parseApiKeysText(raw: unknown): string {
-  if (!Array.isArray(raw)) return '';
+function extractApiKeyName(raw: unknown): string {
+  const record = asRecord(raw);
+  if (!record) return '';
+  const name = record['name'];
+  return typeof name === 'string' ? name.trim() : '';
+}
 
-  const keys: string[] = [];
+function parseApiKeyEntries(raw: unknown): { key: string; name: string }[] {
+  if (!Array.isArray(raw)) return [];
+
+  const entries: { key: string; name: string }[] = [];
   for (const item of raw) {
     const key = extractApiKeyValue(item);
-    if (key) keys.push(key);
+    if (key) {
+      entries.push({ key, name: extractApiKeyName(item) });
+    }
   }
-  return keys.join('\n');
+  return entries;
 }
 
 function replaceApiKeyValue(entry: unknown, apiKey: string): unknown {
@@ -60,23 +70,26 @@ function replaceApiKeyValue(entry: unknown, apiKey: string): unknown {
 }
 
 function buildApiKeyEntries(
-  apiKeys: string[],
+  entries: ProxyApiKeyEntry[],
   metadata: ApiKeysStorageMetadata
 ): Array<string | Record<string, unknown>> {
-  return apiKeys.map((apiKey, index) => {
+  return entries.map(({ key, name }, index) => {
     const originalEntry = metadata.originalEntries[index];
-    if (metadata.entryMode === 'object') {
-      const replaced = replaceApiKeyValue(originalEntry, apiKey);
-      return asRecord(replaced) ?? { 'api-key': apiKey };
+    const nameObj = name.trim() ? { name: name.trim() } : {};
+    const hasName = name.trim().length > 0;
+
+    if (metadata.entryMode === 'object' || hasName) {
+      const replaced = replaceApiKeyValue(originalEntry, key);
+      return { ...(asRecord(replaced) ?? { 'api-key': key }), ...nameObj };
     }
 
     const record = asRecord(originalEntry);
-    return record ? ({ ...record, ...(replaceApiKeyValue(record, apiKey) as Record<string, unknown>) }) : apiKey;
+    return record ? ({ ...record, ...(replaceApiKeyValue(record, key) as Record<string, unknown>) }) : key;
   });
 }
 
 function resolveApiKeysStorage(parsed: Record<string, unknown>): {
-  text: string;
+  entries: { key: string; name: string }[];
   metadata: ApiKeysStorageMetadata;
 } {
   const legacyEntries = Array.isArray(parsed['api-keys']) ? parsed['api-keys'] : [];
@@ -95,7 +108,7 @@ function resolveApiKeysStorage(parsed: Record<string, unknown>): {
       : 'api-keys';
 
     return {
-      text: parseApiKeysText(providerEntries),
+      entries: parseApiKeyEntries(providerEntries),
       metadata: {
         source: 'auth-provider',
         providerListKey,
@@ -110,7 +123,7 @@ function resolveApiKeysStorage(parsed: Record<string, unknown>): {
   }
 
   return {
-    text: parseApiKeysText(legacyEntries),
+    entries: parseApiKeyEntries(legacyEntries),
     metadata: {
       source: 'legacy',
       entryMode: legacyEntries.some((entry) => Boolean(asRecord(entry))) ? 'object' : 'string',
@@ -118,6 +131,24 @@ function resolveApiKeysStorage(parsed: Record<string, unknown>): {
       syncLegacy: false,
     },
   };
+}
+
+/**
+ * 从 YAML 字符串中提取 api-key → name 映射，用于监控中心展示姓名
+ */
+export function buildApiKeyNameMap(yamlContent: string): Record<string, string> {
+  try {
+    const parsedRaw: unknown = parseYaml(yamlContent) || {};
+    const parsed = asRecord(parsedRaw) ?? {};
+    const { entries } = resolveApiKeysStorage(parsed);
+    const map: Record<string, string> = {};
+    for (const { key, name } of entries) {
+      if (name) map[key] = name;
+    }
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 type YamlDocument = ReturnType<typeof parseDocument>;
@@ -493,7 +524,7 @@ export function useVisualConfig() {
               : '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
-        apiKeysText: apiKeysStorage.text,
+        apiKeyEntries: apiKeysStorage.entries.map((e) => ({ ...e, id: makeClientId() })),
 
         debug: Boolean(parsed.debug),
         commercialMode: Boolean(parsed['commercial-mode']),
@@ -591,12 +622,11 @@ export function useVisualConfig() {
         }
 
         setStringInDoc(doc, ['auth-dir'], values.authDir);
-        if (values.apiKeysText !== baselineValues.apiKeysText) {
-          const apiKeys = values.apiKeysText
-            .split('\n')
-            .map((key) => key.trim())
-            .filter(Boolean);
-          const apiKeyEntries = buildApiKeyEntries(apiKeys, apiKeysStorageMetadata);
+        if (JSON.stringify(values.apiKeyEntries.map(({ key, name }) => ({ key, name }))) !==
+            JSON.stringify(baselineValues.apiKeyEntries.map(({ key, name }) => ({ key, name })))) {
+          const builtEntries = buildApiKeyEntries(values.apiKeyEntries, apiKeysStorageMetadata);
+          const keyCount = values.apiKeyEntries.length;
+          const legacyKeys = values.apiKeyEntries.map((e) => e.key);
 
           if (apiKeysStorageMetadata.source === 'auth-provider') {
             ensureMapInDoc(doc, ['auth']);
@@ -606,8 +636,8 @@ export function useVisualConfig() {
             const providerListKey = apiKeysStorageMetadata.providerListKey ?? 'api-key-entries';
             const providerPath = ['auth', 'providers', 'config-api-key', providerListKey];
 
-            if (apiKeys.length > 0) {
-              doc.setIn(providerPath, apiKeyEntries);
+            if (keyCount > 0) {
+              doc.setIn(providerPath, builtEntries);
             } else if (docHas(doc, providerPath)) {
               doc.deleteIn(providerPath);
             }
@@ -617,14 +647,14 @@ export function useVisualConfig() {
             deleteIfMapEmpty(doc, ['auth']);
 
             if (apiKeysStorageMetadata.syncLegacy) {
-              if (apiKeys.length > 0) {
-                doc.setIn(['api-keys'], apiKeys);
+              if (keyCount > 0) {
+                doc.setIn(['api-keys'], legacyKeys);
               } else if (docHas(doc, ['api-keys'])) {
                 doc.deleteIn(['api-keys']);
               }
             }
-          } else if (apiKeys.length > 0) {
-            doc.setIn(['api-keys'], apiKeyEntries);
+          } else if (keyCount > 0) {
+            doc.setIn(['api-keys'], builtEntries);
           } else if (docHas(doc, ['api-keys'])) {
             doc.deleteIn(['api-keys']);
           }

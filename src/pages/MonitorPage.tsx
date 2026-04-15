@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useThemeStore } from '@/stores';
-import { providersApi, authFilesApi } from '@/services/api';
+import { providersApi, authFilesApi, configFileApi } from '@/services/api';
+import { buildApiKeyNameMap } from '@/hooks/useVisualConfig';
 import { KpiCards } from '@/components/monitor/KpiCards';
 import { ModelDistributionChart } from '@/components/monitor/ModelDistributionChart';
 import { DailyTrendChart } from '@/components/monitor/DailyTrendChart';
@@ -65,6 +66,7 @@ export function MonitorPage() {
   const [providerModels, setProviderModels] = useState<Record<string, Set<string>>>({});
   const [providerTypeMap, setProviderTypeMap] = useState<Record<string, string>>({});
   const [authIndexMap, setAuthIndexMap] = useState<Record<string, string>>({});
+  const [apiKeyNameMap, setApiKeyNameMap] = useState<Record<string, string>>({});
 
   // 加载渠道名称映射（支持所有提供商类型）
   const loadProviderMap = useCallback(async () => {
@@ -74,13 +76,14 @@ export function MonitorPage() {
       const typeMap: Record<string, string> = {};
 
       // 并行加载所有提供商配置
-      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs, authFilesRes] = await Promise.all([
+      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs, authFilesRes, configYaml] = await Promise.all([
         providersApi.getOpenAIProviders().catch(() => []),
         providersApi.getGeminiKeys().catch(() => []),
         providersApi.getClaudeConfigs().catch(() => []),
         providersApi.getCodexConfigs().catch(() => []),
         providersApi.getVertexConfigs().catch(() => []),
         authFilesApi.list().catch(() => ({ files: [] })),
+        configFileApi.fetchConfigYaml().catch(() => ''),
       ]);
 
       // 处理 OpenAI 兼容提供商
@@ -207,6 +210,7 @@ export function MonitorPage() {
       setProviderModels(modelsMap);
       setProviderTypeMap(typeMap);
       setAuthIndexMap(authIdxMap);
+      setApiKeyNameMap(configYaml ? buildApiKeyNameMap(configYaml) : {});
     } catch (err) {
       console.warn('Monitor: Failed to load provider map:', err);
     }
@@ -348,6 +352,7 @@ export function MonitorPage() {
         providerTypeMap={providerTypeMap}
         apiFilter={apiFilter}
         authIndexMap={authIndexMap}
+        apiKeyNameMap={apiKeyNameMap}
       />
     </div>
   );
