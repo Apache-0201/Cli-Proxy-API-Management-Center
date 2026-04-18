@@ -115,4 +115,19 @@ export const configApi = {
    * 更新路由策略
    */
   updateRoutingStrategy: (strategy: string) => apiClient.put('/routing/strategy', { value: strategy }),
+
+  /**
+   * 获取默认模型账号（account-bind 策略）
+   */
+  async getDefaultModelAccount(): Promise<string> {
+    const data = await apiClient.get<Record<string, unknown>>('/routing/default-model-account');
+    const value = data?.['default-model-account'] ?? data?.defaultModelAccount ?? '';
+    return typeof value === 'string' ? value : '';
+  },
+
+  /**
+   * 更新默认模型账号
+   */
+  updateDefaultModelAccount: (value: string) =>
+    apiClient.put('/routing/default-model-account', { value }),
 };

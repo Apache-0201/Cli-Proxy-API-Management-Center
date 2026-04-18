@@ -44,14 +44,26 @@ function extractApiKeyName(raw: unknown): string {
   return typeof name === 'string' ? name.trim() : '';
 }
 
-function parseApiKeyEntries(raw: unknown): { key: string; name: string }[] {
+function extractApiKeyAuthIndex(raw: unknown): string | undefined {
+  const record = asRecord(raw);
+  if (!record) return undefined;
+  const idx = record['auth_index'] ?? record['authIndex'] ?? record['auth-index'];
+  if (typeof idx === 'string') {
+    const trimmed = idx.trim();
+    return trimmed || undefined;
+  }
+  return undefined;
+}
+
+function parseApiKeyEntries(raw: unknown): { key: string; name: string; authIndex?: string }[] {
   if (!Array.isArray(raw)) return [];
 
-  const entries: { key: string; name: string }[] = [];
+  const entries: { key: string; name: string; authIndex?: string }[] = [];
   for (const item of raw) {
     const key = extractApiKeyValue(item);
     if (key) {
-      entries.push({ key, name: extractApiKeyName(item) });
+      const authIndex = extractApiKeyAuthIndex(item);
+      entries.push({ key, name: extractApiKeyName(item), ...(authIndex ? { authIndex } : {}) });
     }
   }
   return entries;
@@ -73,14 +85,16 @@ function buildApiKeyEntries(
   entries: ProxyApiKeyEntry[],
   metadata: ApiKeysStorageMetadata
 ): Array<string | Record<string, unknown>> {
-  return entries.map(({ key, name }, index) => {
+  return entries.map(({ key, name, authIndex }, index) => {
     const originalEntry = metadata.originalEntries[index];
     const nameObj = name.trim() ? { name: name.trim() } : {};
+    const authIndexObj = authIndex?.trim() ? { auth_index: authIndex.trim() } : {};
     const hasName = name.trim().length > 0;
+    const hasAuthIndex = Boolean(authIndex?.trim());
 
-    if (metadata.entryMode === 'object' || hasName) {
+    if (metadata.entryMode === 'object' || hasName || hasAuthIndex) {
       const replaced = replaceApiKeyValue(originalEntry, key);
-      return { ...(asRecord(replaced) ?? { 'api-key': key }), ...nameObj };
+      return { ...(asRecord(replaced) ?? { 'api-key': key }), ...nameObj, ...authIndexObj };
     }
 
     const record = asRecord(originalEntry);
@@ -548,7 +562,14 @@ export function useVisualConfig() {
             ? 'fill-first'
             : routing?.strategy === 'sf' || routing?.strategy === 'sequential-fill'
               ? 'sf'
-              : 'round-robin',
+              : routing?.strategy === 'account-bind'
+                ? 'account-bind'
+                : 'round-robin',
+
+        defaultModelAccount:
+          typeof routing?.['default-model-account'] === 'string'
+            ? routing['default-model-account']
+            : '',
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadOverrideRules: parsePayloadRules(payload?.override),
@@ -622,8 +643,8 @@ export function useVisualConfig() {
         }
 
         setStringInDoc(doc, ['auth-dir'], values.authDir);
-        if (JSON.stringify(values.apiKeyEntries.map(({ key, name }) => ({ key, name }))) !==
-            JSON.stringify(baselineValues.apiKeyEntries.map(({ key, name }) => ({ key, name })))) {
+        if (JSON.stringify(values.apiKeyEntries.map(({ key, name, authIndex }) => ({ key, name, authIndex }))) !==
+            JSON.stringify(baselineValues.apiKeyEntries.map(({ key, name, authIndex }) => ({ key, name, authIndex })))) {
           const builtEntries = buildApiKeyEntries(values.apiKeyEntries, apiKeysStorageMetadata);
           const keyCount = values.apiKeyEntries.length;
           const legacyKeys = values.apiKeyEntries.map((e) => e.key);
@@ -690,6 +711,11 @@ export function useVisualConfig() {
         if (docHas(doc, ['routing']) || values.routingStrategy !== 'round-robin') {
           ensureMapInDoc(doc, ['routing']);
           doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          if (values.routingStrategy === 'account-bind') {
+            setStringInDoc(doc, ['routing', 'default-model-account'], values.defaultModelAccount);
+          } else if (docHas(doc, ['routing', 'default-model-account'])) {
+            doc.deleteIn(['routing', 'default-model-account']);
+          }
           deleteIfMapEmpty(doc, ['routing']);
         }
 

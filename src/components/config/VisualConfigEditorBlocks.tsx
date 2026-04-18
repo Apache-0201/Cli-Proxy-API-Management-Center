@@ -36,10 +36,16 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   value,
   disabled,
   onChange,
+  isAccountBind = false,
+  authIndexOptions = [],
+  defaultModelAccount = '',
 }: {
   value: ProxyApiKeyEntry[];
   disabled?: boolean;
   onChange: (nextValue: ProxyApiKeyEntry[]) => void;
+  isAccountBind?: boolean;
+  authIndexOptions?: { value: string; label: string }[];
+  defaultModelAccount?: string;
 }) {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -48,10 +54,12 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   const apiKeyHintId = `${apiKeyInputId}-hint`;
   const apiKeyErrorId = `${apiKeyInputId}-error`;
   const nameInputId = `${apiKeyInputId}-name`;
+  const authIndexSelectId = `${apiKeyInputId}-auth-index`;
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [keyInputValue, setKeyInputValue] = useState('');
   const [nameInputValue, setNameInputValue] = useState('');
+  const [authIndexValue, setAuthIndexValue] = useState('');
   const [formError, setFormError] = useState('');
 
   function generateSecureApiKey(): string {
@@ -65,6 +73,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     setEditingEntryId(null);
     setKeyInputValue('');
     setNameInputValue('');
+    setAuthIndexValue(defaultModelAccount);
     setFormError('');
     setModalOpen(true);
   };
@@ -74,6 +83,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     setEditingEntryId(entryId);
     setKeyInputValue(entry?.key ?? '');
     setNameInputValue(entry?.name ?? '');
+    setAuthIndexValue(entry?.authIndex ?? defaultModelAccount);
     setFormError('');
     setModalOpen(true);
   };
@@ -82,6 +92,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     setModalOpen(false);
     setKeyInputValue('');
     setNameInputValue('');
+    setAuthIndexValue('');
     setEditingEntryId(null);
     setFormError('');
   };
@@ -101,13 +112,28 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       return;
     }
 
+    const trimmedAuthIndex = authIndexValue.trim();
+    if (isAccountBind && !trimmedAuthIndex) {
+      setFormError(t('config_management.visual.api_keys.error_auth_index_required'));
+      return;
+    }
+
     const trimmedName = nameInputValue.trim();
+    const newEntry: ProxyApiKeyEntry = {
+      id: makeClientId(),
+      key: trimmedKey,
+      name: trimmedName,
+      ...(trimmedAuthIndex ? { authIndex: trimmedAuthIndex } : {}),
+    };
+
     if (editingEntryId === null) {
-      onChange([...value, { id: makeClientId(), key: trimmedKey, name: trimmedName }]);
+      onChange([...value, newEntry]);
     } else {
       onChange(
         value.map((e) =>
-          e.id === editingEntryId ? { ...e, key: trimmedKey, name: trimmedName } : e
+          e.id === editingEntryId
+            ? { ...e, key: trimmedKey, name: trimmedName, authIndex: trimmedAuthIndex || undefined }
+            : e
         )
       );
     }
@@ -260,6 +286,25 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
             </div>
           )}
         </div>
+        {isAccountBind && (
+          <div className="form-group">
+            <label htmlFor={authIndexSelectId}>
+              {t('config_management.visual.api_keys.auth_index_label')}
+              {' '}
+              <span style={{ color: 'var(--color-danger, #e53e3e)' }}>*</span>
+            </label>
+            <Select
+              id={authIndexSelectId}
+              value={authIndexValue}
+              options={[
+                { value: '', label: t('config_management.visual.api_keys.auth_index_placeholder') },
+                ...authIndexOptions,
+              ]}
+              disabled={disabled}
+              onChange={(v) => setAuthIndexValue(v)}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );

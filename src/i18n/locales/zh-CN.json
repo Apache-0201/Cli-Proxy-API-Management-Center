@@ -1173,6 +1173,9 @@
           "strategy_round_robin": "轮询 (Round Robin)",
           "strategy_fill_first": "填充优先 (Fill First)",
           "strategy_sf": "顺序填充 (Sequential Fill)",
+          "strategy_account_bind": "账号绑定 (Account Bind)",
+          "default_model_account": "默认模型账号",
+          "default_model_account_placeholder": "请选择默认账号",
           "force_model_prefix": "强制模型前缀",
           "force_model_prefix_desc": "未带前缀的模型请求只使用无前缀凭据",
           "ws_auth": "WebSocket 认证",
@@ -1221,8 +1224,11 @@
         "input_hint": "此处仅修改本地配置文件内容，不会自动同步到 API 密钥管理接口",
         "error_empty": "请输入 API 密钥",
         "error_invalid": "API 密钥包含无效字符",
+        "error_auth_index_required": "账号绑定策略下必须选择模型账号",
         "name_label": "姓名",
-        "name_placeholder": "请输入持有人姓名（可选）"
+        "name_placeholder": "请输入持有人姓名（可选）",
+        "auth_index_label": "模型账号",
+        "auth_index_placeholder": "请选择模型账号"
       },
       "payload_rules": {
         "rule": "规则",

@@ -1,4 +1,4 @@
-import { useCallback, useId, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -18,6 +18,8 @@ import {
   PayloadFilterRulesEditor,
   PayloadRulesEditor,
 } from './VisualConfigEditorBlocks';
+import { authFilesApi } from '@/services/api/authFiles';
+import type { AuthFileItem } from '@/types/authFile';
 
 interface VisualConfigEditorProps {
   values: VisualConfigValues;
@@ -88,6 +90,27 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
   const { t } = useTranslation();
   const routingStrategyLabelId = useId();
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
+  const defaultModelAccountLabelId = useId();
+
+  const [authFiles, setAuthFiles] = useState<AuthFileItem[]>([]);
+  useEffect(() => {
+    authFilesApi.list().then((res) => {
+      setAuthFiles(res.files ?? []);
+    }).catch(() => { /* silent – dropdown stays empty */ });
+  }, []);
+
+  const authIndexOptions = useMemo(
+    () =>
+      authFiles
+        .filter((f) => f.authIndex != null && String(f.authIndex).trim() !== '')
+        .map((f) => ({
+          value: String(f.authIndex),
+          label: `${f.name} (${f.authIndex})`,
+        })),
+    [authFiles]
+  );
+
+  const isAccountBind = values.routingStrategy === 'account-bind';
   const keepaliveInputId = useId();
   const keepaliveHintId = `${keepaliveInputId}-hint`;
   const keepaliveErrorId = `${keepaliveInputId}-error`;
@@ -231,6 +254,9 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
             value={values.apiKeyEntries}
             disabled={disabled}
             onChange={handleApiKeyEntriesChange}
+            isAccountBind={isAccountBind}
+            authIndexOptions={authIndexOptions}
+            defaultModelAccount={values.defaultModelAccount}
           />
         </div>
       </ConfigSection>
@@ -285,13 +311,52 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
       <ConfigSection title={t('config_management.visual.sections.network.title')} description={t('config_management.visual.sections.network.description')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <SectionGrid>
-            <Input
-              label={t('config_management.visual.sections.network.proxy_url')}
-              placeholder="socks5://user:pass@127.0.0.1:1080/"
-              value={values.proxyUrl}
-              onChange={(e) => onChange({ proxyUrl: e.target.value })}
-              disabled={disabled}
-            />
+            <div className="form-group">
+              <label id={routingStrategyLabelId} htmlFor={`${routingStrategyLabelId}-select`}>{t('config_management.visual.sections.network.routing_strategy')}</label>
+              <Select
+                value={values.routingStrategy}
+                options={[
+                  { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },
+                  { value: 'fill-first', label: t('config_management.visual.sections.network.strategy_fill_first') },
+                  { value: 'sf', label: t('config_management.visual.sections.network.strategy_sf') },
+                  { value: 'account-bind', label: t('config_management.visual.sections.network.strategy_account_bind') },
+                ]}
+                id={`${routingStrategyLabelId}-select`}
+                disabled={disabled}
+                ariaLabelledBy={routingStrategyLabelId}
+                ariaDescribedBy={routingStrategyHintId}
+                onChange={(nextValue) =>
+                  onChange({ routingStrategy: nextValue as VisualConfigValues['routingStrategy'] })
+                }
+              />
+              <div id={routingStrategyHintId} className="hint">{t('config_management.visual.sections.network.routing_strategy_hint')}</div>
+            </div>
+            {isAccountBind ? (
+              <div className="form-group">
+                <label id={defaultModelAccountLabelId} htmlFor={`${defaultModelAccountLabelId}-select`}>
+                  {t('config_management.visual.sections.network.default_model_account')}
+                </label>
+                <Select
+                  value={values.defaultModelAccount}
+                  options={[
+                    { value: '', label: t('config_management.visual.sections.network.default_model_account_placeholder') },
+                    ...authIndexOptions,
+                  ]}
+                  id={`${defaultModelAccountLabelId}-select`}
+                  disabled={disabled}
+                  ariaLabelledBy={defaultModelAccountLabelId}
+                  onChange={(v) => onChange({ defaultModelAccount: v })}
+                />
+              </div>
+            ) : (
+              <Input
+                label={t('config_management.visual.sections.network.proxy_url')}
+                placeholder="socks5://user:pass@127.0.0.1:1080/"
+                value={values.proxyUrl}
+                onChange={(e) => onChange({ proxyUrl: e.target.value })}
+                disabled={disabled}
+              />
+            )}
             <Input
               label={t('config_management.visual.sections.network.request_retry')}
               type="number"
@@ -310,25 +375,6 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
               disabled={disabled}
               error={maxRetryIntervalError}
             />
-            <div className="form-group">
-              <label id={routingStrategyLabelId} htmlFor={`${routingStrategyLabelId}-select`}>{t('config_management.visual.sections.network.routing_strategy')}</label>
-              <Select
-                value={values.routingStrategy}
-                options={[
-                  { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },
-                  { value: 'fill-first', label: t('config_management.visual.sections.network.strategy_fill_first') },
-                  { value: 'sf', label: t('config_management.visual.sections.network.strategy_sf') },
-                ]}
-                id={`${routingStrategyLabelId}-select`}
-                disabled={disabled}
-                ariaLabelledBy={routingStrategyLabelId}
-                ariaDescribedBy={routingStrategyHintId}
-                onChange={(nextValue) =>
-                  onChange({ routingStrategy: nextValue as VisualConfigValues['routingStrategy'] })
-                }
-              />
-              <div id={routingStrategyHintId} className="hint">{t('config_management.visual.sections.network.routing_strategy_hint')}</div>
-            </div>
           </SectionGrid>
 
           <ToggleRow

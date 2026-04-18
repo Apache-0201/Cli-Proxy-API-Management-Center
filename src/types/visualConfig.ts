@@ -73,7 +73,8 @@ export type VisualConfigValues = {
   maxRetryInterval: string;
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
-  routingStrategy: 'round-robin' | 'fill-first' | 'sf';
+  routingStrategy: 'round-robin' | 'fill-first' | 'sf' | 'account-bind';
+  defaultModelAccount: string;
   wsAuth: boolean;
   payloadDefaultRules: PayloadRule[];
   payloadOverrideRules: PayloadRule[];
@@ -85,6 +86,7 @@ export type ProxyApiKeyEntry = {
   id: string;
   key: string;
   name: string;
+  authIndex?: string;
 };
 
 export const makeClientId = () => {
@@ -116,6 +118,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   quotaSwitchProject: true,
   quotaSwitchPreviewModel: true,
   routingStrategy: 'round-robin',
+  defaultModelAccount: '',
   wsAuth: false,
   payloadDefaultRules: [],
   payloadOverrideRules: [],
