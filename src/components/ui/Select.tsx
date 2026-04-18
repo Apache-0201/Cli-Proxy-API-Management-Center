@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconChevronDown } from './icons';
+import { resolveSelectOptionVisualState } from './selectOptionState';
+import { resolveSelectDropdownPlacement, SELECT_DROPDOWN_OFFSET } from './selectPlacement';
 import styles from './Select.module.scss';
 
 export interface SelectOption {
@@ -44,24 +46,27 @@ export function Select({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
-  // 每次打开时计算 fixed 定位坐标，使下拉层跳出任何 overflow 容器
+  // Recalculate fixed coordinates on open so the dropdown can escape overflow containers.
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
-    const dropdownMaxH = 240;
-    const spaceBelow = viewportHeight - rect.bottom - 8;
-    const spaceAbove = rect.top - 8;
-    const openUpward = spaceBelow < dropdownMaxH && spaceAbove > spaceBelow;
+    const placement = resolveSelectDropdownPlacement({
+      triggerTop: rect.top,
+      triggerBottom: rect.bottom,
+      viewportHeight,
+      optionCount: options.length,
+    });
 
     setDropdownStyle({
       position: 'fixed',
       left: rect.left,
       width: rect.width,
       zIndex: 9999,
-      ...(openUpward
-        ? { bottom: viewportHeight - rect.top + 6, top: 'auto' }
-        : { top: rect.bottom + 6, bottom: 'auto' }),
+      maxHeight: placement.maxHeight,
+      ...(placement.direction === 'top'
+        ? { bottom: viewportHeight - rect.top + SELECT_DROPDOWN_OFFSET, top: 'auto' }
+        : { top: rect.bottom + SELECT_DROPDOWN_OFFSET, bottom: 'auto' }),
     });
 
     const handleScrollOrResize = () => setOpen(false);
@@ -71,7 +76,7 @@ export function Select({
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('resize', handleScrollOrResize);
     };
-  }, [open]);
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open || disabled) return;
@@ -212,6 +217,15 @@ export function Select({
           {options.map((opt, index) => {
             const active = opt.value === value;
             const highlighted = index === resolvedHighlightedIndex;
+            const optionState = resolveSelectOptionVisualState({ active, highlighted });
+            const optionStateClassName =
+              optionState === 'active'
+                ? styles.optionActive
+                : optionState === 'highlighted'
+                  ? styles.optionHighlighted
+                  : optionState === 'activeHighlighted'
+                    ? styles.optionActiveHighlighted
+                    : '';
             return (
               <button
                 key={opt.value}
@@ -219,7 +233,7 @@ export function Select({
                 type="button"
                 role="option"
                 aria-selected={active}
-                className={`${styles.option} ${active ? styles.optionActive : ''} ${highlighted ? styles.optionHighlighted : ''}`.trim()}
+                className={`${styles.option} ${optionStateClassName}`.trim()}
                 onMouseEnter={() => setHighlightedIndex(index)}
                 onKeyDown={handleKeyDown}
                 onClick={() => commitSelection(index)}

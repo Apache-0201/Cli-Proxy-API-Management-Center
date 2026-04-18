@@ -18,8 +18,9 @@ import {
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
+import { buildApiKeyNameMap } from '@/hooks/useVisualConfig';
 import { useThemeStore } from '@/stores';
-import { providersApi, authFilesApi } from '@/services/api';
+import { providersApi, authFilesApi, configFileApi } from '@/services/api';
 import { KpiCards } from '@/components/monitor/KpiCards';
 import { ModelDistributionChart } from '@/components/monitor/ModelDistributionChart';
 import { DailyTrendChart } from '@/components/monitor/DailyTrendChart';
@@ -27,6 +28,7 @@ import { HourlyModelChart } from '@/components/monitor/HourlyModelChart';
 import { HourlyTokenChart } from '@/components/monitor/HourlyTokenChart';
 import { ChannelStats } from '@/components/monitor/ChannelStats';
 import { FailureAnalysis } from '@/components/monitor/FailureAnalysis';
+import { RequestLogs } from '@/components/monitor/RequestLogs';
 import { ServiceHealthCard } from '@/components/monitor/ServiceHealthCard';
 import styles from './MonitorPage.module.scss';
 
@@ -49,6 +51,28 @@ ChartJS.register(
 // 时间范围选项
 export type TimeRange = 'yesterday' | 'dayBeforeYesterday' | 1 | 7 | 14 | 30;
 
+const buildAuthIndexDisplayName = (fileName: string, fileType?: string, authIndex?: string) => {
+  const normalizedType = String(fileType || '')
+    .trim()
+    .toLowerCase();
+  const fallbackLabel = fileName;
+  const baseName = fileName.replace(/\.json$/i, '');
+
+  let emailPrefix = '';
+  const atIndex = baseName.indexOf('@');
+  if (atIndex > 0) {
+    const localPart = baseName.slice(0, atIndex);
+    const localSegments = localPart.split('-').filter(Boolean);
+    if (normalizedType && localSegments[0]?.toLowerCase() === normalizedType) {
+      localSegments.shift();
+    }
+    emailPrefix = localSegments[localSegments.length - 1] || localPart;
+  }
+
+  const label = normalizedType && emailPrefix ? `${normalizedType}-${emailPrefix}` : fallbackLabel;
+  return authIndex ? `${label} (${authIndex})` : label;
+};
+
 export function MonitorPage() {
   const { t } = useTranslation();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
@@ -62,21 +86,34 @@ export function MonitorPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [providerMap, setProviderMap] = useState<Record<string, string>>({});
   const [providerModels, setProviderModels] = useState<Record<string, Set<string>>>({});
+  const [providerTypeMap, setProviderTypeMap] = useState<Record<string, string>>({});
+  const [authIndexMap, setAuthIndexMap] = useState<Record<string, string>>({});
+  const [apiKeyNameMap, setApiKeyNameMap] = useState<Record<string, string>>({});
 
   // 加载渠道名称映射（支持所有提供商类型）
   const loadProviderMap = useCallback(async () => {
     try {
       const map: Record<string, string> = {};
       const modelsMap: Record<string, Set<string>> = {};
+      const typeMap: Record<string, string> = {};
 
       // 并行加载所有提供商配置
-      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs, authFilesRes] = await Promise.all([
+      const [
+        openaiProviders,
+        geminiKeys,
+        claudeConfigs,
+        codexConfigs,
+        vertexConfigs,
+        authFilesRes,
+        configYaml,
+      ] = await Promise.all([
         providersApi.getOpenAIProviders().catch(() => []),
         providersApi.getGeminiKeys().catch(() => []),
         providersApi.getClaudeConfigs().catch(() => []),
         providersApi.getCodexConfigs().catch(() => []),
         providersApi.getVertexConfigs().catch(() => []),
         authFilesApi.list().catch(() => ({ files: [] })),
+        configFileApi.fetchConfigYaml().catch(() => ''),
       ]);
 
       // 处理 OpenAI 兼容提供商
@@ -93,11 +130,13 @@ export function MonitorPage() {
           if (apiKey) {
             map[apiKey] = providerName;
             modelsMap[apiKey] = modelSet;
+            typeMap[apiKey] = 'OpenAI';
           }
         });
         if (provider.name) {
           map[provider.name] = providerName;
           modelsMap[provider.name] = modelSet;
+          typeMap[provider.name] = 'OpenAI';
         }
       });
 
@@ -107,6 +146,7 @@ export function MonitorPage() {
         if (apiKey) {
           const providerName = config.prefix?.trim() || 'Gemini';
           map[apiKey] = providerName;
+          typeMap[apiKey] = 'Gemini';
         }
       });
 
@@ -116,6 +156,7 @@ export function MonitorPage() {
         if (apiKey) {
           const providerName = config.prefix?.trim() || 'Claude';
           map[apiKey] = providerName;
+          typeMap[apiKey] = 'Claude';
           // 存储模型集合
           if (config.models && config.models.length > 0) {
             const modelSet = new Set<string>();
@@ -134,6 +175,7 @@ export function MonitorPage() {
         if (apiKey) {
           const providerName = config.prefix?.trim() || 'Codex';
           map[apiKey] = providerName;
+          typeMap[apiKey] = 'Codex';
           if (config.models && config.models.length > 0) {
             const modelSet = new Set<string>();
             config.models.forEach((m) => {
@@ -151,6 +193,7 @@ export function MonitorPage() {
         if (apiKey) {
           const providerName = config.prefix?.trim() || 'Vertex';
           map[apiKey] = providerName;
+          typeMap[apiKey] = 'Vertex';
           if (config.models && config.models.length > 0) {
             const modelSet = new Set<string>();
             config.models.forEach((m) => {
@@ -175,16 +218,28 @@ export function MonitorPage() {
         iflow: 'iFlow',
       };
       const authFiles = authFilesRes?.files || [];
+      const authIdxMap: Record<string, string> = {};
       authFiles.forEach((file) => {
         const name = file.name;
         if (!name) return;
         const fileType = file.type || 'unknown';
         const providerName = authTypeToProvider[fileType] || fileType;
         map[name] = providerName;
+        typeMap[name] = providerName;
+        const rawAuthIndex = (file as Record<string, unknown>)['auth_index'] ?? file.authIndex;
+        if (rawAuthIndex !== undefined && rawAuthIndex !== null) {
+          const authIndexKey = String(rawAuthIndex).trim();
+          if (authIndexKey) {
+            authIdxMap[authIndexKey] = buildAuthIndexDisplayName(name, file.type, authIndexKey);
+          }
+        }
       });
 
       setProviderMap(map);
       setProviderModels(modelsMap);
+      setProviderTypeMap(typeMap);
+      setAuthIndexMap(authIdxMap);
+      setApiKeyNameMap(configYaml ? buildApiKeyNameMap(configYaml) : {});
     } catch (err) {
       console.warn('Monitor: Failed to load provider map:', err);
     }
@@ -317,6 +372,16 @@ export function MonitorPage() {
         <ChannelStats refreshKey={refreshKey} loading={loading} providerMap={providerMap} providerModels={providerModels} />
         <FailureAnalysis refreshKey={refreshKey} loading={loading} providerMap={providerMap} providerModels={providerModels} />
       </div>
+
+      <RequestLogs
+        refreshKey={refreshKey}
+        loading={loading}
+        providerMap={providerMap}
+        providerTypeMap={providerTypeMap}
+        apiFilter={apiFilter}
+        authIndexMap={authIndexMap}
+        apiKeyNameMap={apiKeyNameMap}
+      />
     </div>
   );
 }
