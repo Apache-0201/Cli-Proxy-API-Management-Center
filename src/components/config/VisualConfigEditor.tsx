@@ -102,11 +102,14 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
   const authIndexOptions = useMemo(
     () =>
       authFiles
-        .filter((f) => f.authIndex != null && String(f.authIndex).trim() !== '')
-        .map((f) => ({
-          value: String(f.authIndex),
-          label: `${f.name} (${f.authIndex})`,
-        })),
+        .map((f) => {
+          // API 返回 auth_index（snake_case），类型定义为 authIndex（camelCase），兼容两者
+          const idx = f['auth_index'] ?? f.authIndex;
+          return idx != null && String(idx).trim() !== ''
+            ? { value: String(idx), label: `${f.name} (${idx})` }
+            : null;
+        })
+        .filter((x): x is { value: string; label: string } => x !== null),
     [authFiles]
   );
 
