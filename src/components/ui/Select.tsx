@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconChevronDown } from './icons';
 import styles from './Select.module.scss';
 
@@ -40,15 +41,53 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  // 每次打开时计算 fixed 定位坐标，使下拉层跳出任何 overflow 容器
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const dropdownMaxH = 240;
+    const spaceBelow = viewportHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const openUpward = spaceBelow < dropdownMaxH && spaceAbove > spaceBelow;
+
+    setDropdownStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+      ...(openUpward
+        ? { bottom: viewportHeight - rect.top + 6, top: 'auto' }
+        : { top: rect.bottom + 6, bottom: 'auto' }),
+    });
+
+    const handleScrollOrResize = () => setOpen(false);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || disabled) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      const dropdownEl = document.getElementById(listboxId);
+      if (
+        !wrapRef.current?.contains(target) &&
+        !dropdownEl?.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [disabled, open]);
+  }, [disabled, listboxId, open]);
 
   const isOpen = open && !disabled;
   const selectedIndex = useMemo(() => options.findIndex((option) => option.value === value), [options, value]);
@@ -142,6 +181,7 @@ export function Select({
       ref={wrapRef}
     >
       <button
+        ref={triggerRef}
         id={selectId}
         type="button"
         className={styles.trigger}
@@ -167,8 +207,8 @@ export function Select({
           <IconChevronDown size={14} />
         </span>
       </button>
-      {isOpen && (
-        <div className={styles.dropdown} id={listboxId} role="listbox" aria-label={ariaLabel}>
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div className={styles.dropdown} id={listboxId} role="listbox" aria-label={ariaLabel} style={dropdownStyle}>
           {options.map((opt, index) => {
             const active = opt.value === value;
             const highlighted = index === resolvedHighlightedIndex;
@@ -188,7 +228,8 @@ export function Select({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
