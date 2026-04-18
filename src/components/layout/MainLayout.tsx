@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/common/PageTransition';
@@ -16,11 +16,7 @@ import {
   IconSidebarAuthFiles,
   IconSidebarConfig,
   IconSidebarDashboard,
-  IconSidebarLogs,
   IconSidebarOauth,
-  IconSidebarProviders,
-  IconSidebarQuota,
-  IconSidebarSystem,
   IconActivity,
 } from '@/components/ui/icons';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
@@ -39,13 +35,9 @@ import type { Theme } from '@/types';
 
 const sidebarIcons: Record<string, ReactNode> = {
   dashboard: <IconSidebarDashboard size={18} />,
-  aiProviders: <IconSidebarProviders size={18} />,
   authFiles: <IconSidebarAuthFiles size={18} />,
   oauth: <IconSidebarOauth size={18} />,
-  quota: <IconSidebarQuota size={18} />,
   config: <IconSidebarConfig size={18} />,
-  logs: <IconSidebarLogs size={18} />,
-  system: <IconSidebarSystem size={18} />,
   monitor: <IconActivity size={18} />,
 };
 
@@ -212,13 +204,11 @@ const THEME_CARDS: Array<{
 export function MainLayout() {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
-  const location = useLocation();
 
   const apiBase = useAuthStore((state) => state.apiBase);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const logout = useAuthStore((state) => state.logout);
 
-  const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   const clearCache = useConfigStore((state) => state.clearCache);
 
@@ -240,8 +230,6 @@ export function MainLayout() {
 
   const fullBrandName = 'CLI Proxy API Management Center';
   const abbrBrandName = t('title.abbr');
-  const isLogsPage = location.pathname.startsWith('/logs');
-
   // 将顶栏高度写入 CSS 变量，确保侧栏/内容区计算一致，防止滚动时抖动
   useLayoutEffect(() => {
     const updateHeaderHeight = () => {
@@ -439,13 +427,8 @@ export function MainLayout() {
   const navItems = [
     { path: '/', label: t('nav.dashboard'), icon: sidebarIcons.dashboard },
     { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
-    { path: '/ai-providers', label: t('nav.ai_providers'), icon: sidebarIcons.aiProviders },
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
-    { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
-    ...(config?.loggingToFile
-      ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
-      : []),
     { path: '/monitor', label: t('nav.monitor'), icon: sidebarIcons.monitor },
   ];
   const navOrder = navItems.map((item) => item.path);
@@ -454,26 +437,13 @@ export function MainLayout() {
       pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
     const normalizedPath = trimmedPath === '/dashboard' ? '/' : trimmedPath;
 
-    const aiProvidersIndex = navOrder.indexOf('/ai-providers');
-    if (aiProvidersIndex !== -1) {
-      if (normalizedPath === '/ai-providers') return aiProvidersIndex;
-      if (normalizedPath.startsWith('/ai-providers/')) {
-        if (normalizedPath.startsWith('/ai-providers/gemini')) return aiProvidersIndex + 0.1;
-        if (normalizedPath.startsWith('/ai-providers/codex')) return aiProvidersIndex + 0.2;
-        if (normalizedPath.startsWith('/ai-providers/claude')) return aiProvidersIndex + 0.3;
-        if (normalizedPath.startsWith('/ai-providers/vertex')) return aiProvidersIndex + 0.4;
-        if (normalizedPath.startsWith('/ai-providers/ampcode')) return aiProvidersIndex + 0.5;
-        if (normalizedPath.startsWith('/ai-providers/openai')) return aiProvidersIndex + 0.6;
-        return aiProvidersIndex + 0.05;
-      }
-    }
-
     const authFilesIndex = navOrder.indexOf('/auth-files');
     if (authFilesIndex !== -1) {
       if (normalizedPath === '/auth-files') return authFilesIndex;
       if (normalizedPath.startsWith('/auth-files/')) {
         if (normalizedPath.startsWith('/auth-files/oauth-excluded')) return authFilesIndex + 0.1;
         if (normalizedPath.startsWith('/auth-files/oauth-model-alias')) return authFilesIndex + 0.2;
+        if (normalizedPath.startsWith('/auth-files/quota')) return authFilesIndex + 0.3;
         return authFilesIndex + 0.05;
       }
     }
@@ -727,8 +697,8 @@ export function MainLayout() {
           </div>
         </aside>
 
-        <div className={`content${isLogsPage ? ' content-logs' : ''}`} ref={contentRef}>
-          <main className={`main-content${isLogsPage ? ' main-content-logs' : ''}`}>
+        <div className="content" ref={contentRef}>
+          <main className="main-content">
             <PageTransition
               render={(location) => <MainRoutes location={location} />}
               getRouteOrder={getRouteOrder}

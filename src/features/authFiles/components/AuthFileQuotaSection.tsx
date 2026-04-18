@@ -2,7 +2,7 @@ import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ANTIGRAVITY_CONFIG, CLAUDE_CONFIG, CODEX_CONFIG, GEMINI_CLI_CONFIG, KIRO_CONFIG, KIMI_CONFIG } from '@/components/quota';
-import { useNotificationStore, useQuotaStore } from '@/stores';
+import { useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { getStatusFromError } from '@/utils/quota';
 import {
@@ -33,7 +33,6 @@ export type AuthFileQuotaSectionProps = {
 export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
   const { file, quotaType, disableControls } = props;
   const { t } = useTranslation();
-  const showNotification = useNotificationStore((state) => state.showNotification);
 
   const quota = useQuotaStore((state) => {
     if (quotaType === 'antigravity') return state.antigravityQuota[file.name] as QuotaState;
@@ -79,7 +78,6 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
         ...prev,
         [file.name]: config.buildSuccessState(data)
       }));
-      showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('common.unknown_error');
       const status = getStatusFromError(err);
@@ -87,9 +85,8 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
         ...prev,
         [file.name]: config.buildErrorState(message, status)
       }));
-      showNotification(t('auth_files.quota_refresh_failed', { name: file.name, message }), 'error');
     }
-  }, [disableControls, file, quota?.status, quotaType, showNotification, t, updateQuotaState]);
+  }, [disableControls, file, quota?.status, quotaType, t, updateQuotaState]);
 
   const config = getQuotaConfig(quotaType) as unknown as {
     i18nPrefix: string;

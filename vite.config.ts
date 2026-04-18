@@ -4,6 +4,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'path';
 import { execSync } from 'child_process';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFilePath);
 
 // Get version from environment, git tag, or package.json
 function getVersion(): string {
@@ -24,7 +28,7 @@ function getVersion(): string {
 
   // 3. Fall back to package.json version
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(currentDir, 'package.json'), 'utf8'));
     if (pkg.version && pkg.version !== '0.0.0') {
       return pkg.version;
     }
@@ -48,7 +52,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(currentDir, './src')
     }
   },
   css: {

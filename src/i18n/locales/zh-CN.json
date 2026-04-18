@@ -137,7 +137,21 @@
     "edit_settings": "编辑设置",
     "routing_strategy": "路由策略",
     "available_models": "可用模型",
-    "available_models_desc": "所有提供商的模型总数"
+    "available_models_desc": "所有提供商的模型总数",
+    "available_models_card_title": "可用模型列表",
+    "available_models_card_desc": "展示 /models 返回的模型，并自动使用服务器保存的 API Key 进行鉴权。",
+    "available_models_count": "可用模型 {{count}} 个",
+    "available_models_error": "模型列表获取失败: {{message}}",
+    "available_models_empty": "暂无可用模型",
+    "available_models_group_count": "可用模型 {{count}} 个",
+    "available_models_jump_title": "查看可用模型列表",
+    "available_models_jump_desc": "跳转到认证文件页底部，查看当前可用模型。",
+    "tutorial_title": "使用教程",
+    "tutorial_desc": "查看接入方式、认证文件准备和常见操作说明。",
+    "tutorial_stat_value": "文档",
+    "tutorial_stat_desc": "打开接入说明",
+    "tutorial_placeholder": "教程链接待填写，稍后可直接替换配置常量。",
+    "tutorial_pending": "待配置"
   },
   "basic_settings": {
     "title": "基础设置",

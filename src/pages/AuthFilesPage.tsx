@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { animate } from 'motion/mini';
 import type { AnimationPlaybackControlsWithThen } from 'motion-dom';
 import { useInterval } from '@/hooks/useInterval';
@@ -20,13 +20,11 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
   MAX_CARD_PAGE_SIZE,
   MIN_CARD_PAGE_SIZE,
-  QUOTA_PROVIDER_TYPES,
   clampCardPageSize,
   getTypeColor,
   getTypeLabel,
@@ -34,10 +32,10 @@ import {
   isRuntimeOnlyAuthFile,
   normalizeProviderKey,
   parsePriorityValue,
-  type QuotaProviderType,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
+import { AvailableModelsCard } from '@/features/authFiles/components/AvailableModelsCard';
 import { AuthFileDetailModal } from '@/features/authFiles/components/AuthFileDetailModal';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
@@ -65,12 +63,13 @@ import {
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
-import { authFilesApi, type CodexCleanupEvent } from '@/services/api/authFiles';
 import type { AuthFileItem } from '@/types';
 import styles from './AuthFilesPage.module.scss';
 
 const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
 const easePower2In = (progress: number) => progress ** 3;
+const easeSmoothScroll = (progress: number) =>
+  progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
 const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const AUTH_FILE_FILTER_ICONS: Record<string, string | { light: string; dark: string }> = {
@@ -101,6 +100,7 @@ export function AuthFilesPage() {
   const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const location = useLocation();
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
   const navigate = useNavigate();
@@ -118,6 +118,8 @@ export function AuthFilesPage() {
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
+  const availableModelsRef = useRef<HTMLDivElement | null>(null);
+  const availableModelsScrollAnimationRef = useRef<number | null>(null);
   const previousSelectionCountRef = useRef(0);
   const selectionCountRef = useRef(0);
 
@@ -192,22 +194,6 @@ export function AuthFilesPage() {
   });
 
   const disableControls = connectionStatus !== 'connected';
-  const [codexCleaning, setCodexCleaning] = useState(false);
-  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
-  const [cleanupTotal, setCleanupTotal] = useState(0);
-  const [cleanupCurrent, setCleanupCurrent] = useState(0);
-  const [cleanupDeleted, setCleanupDeleted] = useState(0);
-  const [cleanupLogs, setCleanupLogs] = useState<string[]>([]);
-  const [cleanupDone, setCleanupDone] = useState(false);
-  const cleanupAbortRef = useRef<AbortController | null>(null);
-  const cleanupLogsEndRef = useRef<HTMLDivElement | null>(null);
-  const normalizedFilter = normalizeProviderKey(String(filter));
-  const quotaFilterType: QuotaProviderType | null = QUOTA_PROVIDER_TYPES.has(
-    normalizedFilter as QuotaProviderType
-  )
-    ? (normalizedFilter as QuotaProviderType)
-    : null;
-
   useEffect(() => {
     const persisted = readAuthFilesUiState();
     if (!persisted) return;
@@ -290,65 +276,65 @@ export function AuthFilesPage() {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
   }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
 
-  const handleCodexCleanup = useCallback(async () => {
-    setCodexCleaning(true);
-    setCleanupModalOpen(true);
-    setCleanupTotal(0);
-    setCleanupCurrent(0);
-    setCleanupDeleted(0);
-    setCleanupLogs([]);
-    setCleanupDone(false);
-
-    const abort = new AbortController();
-    cleanupAbortRef.current = abort;
-
-    try {
-      await authFilesApi.codexCleanup((ev: CodexCleanupEvent) => {
-        if (ev.type === 'start') {
-          setCleanupTotal(ev.total);
-          setCleanupLogs((prev) => [...prev, t('auth_files.codex_cleanup_log_start', { total: ev.total })]);
-        } else if (ev.type === 'progress') {
-          setCleanupCurrent(ev.index);
-          const status = ev.deleted
-            ? `\u2717 ${t('auth_files.codex_cleanup_log_deleted')}`
-            : ev.error
-              ? `\u26A0 ${ev.error}`
-              : `\u2713 ${t('auth_files.codex_cleanup_log_valid')}`;
-          setCleanupLogs((prev) => [...prev, `[${ev.index}/${ev.total}] ${ev.name} \u2014 ${status}`]);
-          if (ev.deleted) {
-            setCleanupDeleted((prev) => prev + 1);
-          }
-        } else if (ev.type === 'done') {
-          setCleanupDone(true);
-          setCleanupLogs((prev) => [
-            ...prev,
-            t('auth_files.codex_cleanup_log_done', { total: ev.total, deleted: ev.deleted }),
-          ]);
-        }
-      }, abort.signal);
-      await loadFiles();
-    } catch {
-      if (!abort.signal.aborted) {
-        showNotification(t('auth_files.codex_cleanup_failed'), 'error');
-      }
-    } finally {
-      setCodexCleaning(false);
-      cleanupAbortRef.current = null;
-    }
-  }, [loadFiles, showNotification, t]);
-
-  const handleCleanupModalClose = useCallback(() => {
-    if (codexCleaning && cleanupAbortRef.current) {
-      cleanupAbortRef.current.abort();
-    }
-    setCleanupModalOpen(false);
-  }, [codexCleaning]);
-
-  useEffect(() => {
-    cleanupLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [cleanupLogs]);
-
   useHeaderRefresh(handleHeaderRefresh);
+
+  const scrollToAvailableModelsAnchor = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      const target = availableModelsRef.current;
+      if (!target) return;
+
+      const scrollContainer = target.closest('.content') as HTMLElement | null;
+      if (!scrollContainer) {
+        target.scrollIntoView({ behavior, block: 'start' });
+        return;
+      }
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top) - 8;
+      const clampedTop = Math.max(0, nextTop);
+
+      if (availableModelsScrollAnimationRef.current !== null) {
+        cancelAnimationFrame(availableModelsScrollAnimationRef.current);
+        availableModelsScrollAnimationRef.current = null;
+      }
+
+      if (behavior !== 'smooth') {
+        scrollContainer.scrollTo({ top: clampedTop, behavior: 'auto' });
+        return;
+      }
+
+      const fromTop = scrollContainer.scrollTop;
+      const distance = clampedTop - fromTop;
+      if (Math.abs(distance) < 1) {
+        scrollContainer.scrollTo({ top: clampedTop, behavior: 'auto' });
+        return;
+      }
+
+      const duration = Math.min(980, Math.max(520, Math.abs(distance) * 0.9));
+      const startAt = performance.now();
+
+      const animateScroll = (timestamp: number) => {
+        const elapsed = timestamp - startAt;
+        const progress = Math.min(1, elapsed / duration);
+        const eased = easeSmoothScroll(progress);
+        scrollContainer.scrollTo({
+          top: fromTop + distance * eased,
+          behavior: 'auto',
+        });
+
+        if (progress < 1) {
+          availableModelsScrollAnimationRef.current = requestAnimationFrame(animateScroll);
+          return;
+        }
+
+        availableModelsScrollAnimationRef.current = null;
+      };
+
+      availableModelsScrollAnimationRef.current = requestAnimationFrame(animateScroll);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isCurrentLayer) return;
@@ -364,6 +350,19 @@ export function AuthFilesPage() {
     },
     isCurrentLayer ? 240_000 : null
   );
+
+  useEffect(() => {
+    if (!isCurrentLayer) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('anchor') !== 'available-models') return;
+    if (loading) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToAvailableModelsAnchor('smooth');
+      });
+    });
+  }, [isCurrentLayer, loading, location.search, scrollToAvailableModelsAnchor]);
 
   const existingTypes = useMemo(() => {
     const types = new Set<string>(['all']);
@@ -575,6 +574,10 @@ export function AuthFilesPage() {
 
   useEffect(
     () => () => {
+      if (availableModelsScrollAnimationRef.current !== null) {
+        cancelAnimationFrame(availableModelsScrollAnimationRef.current);
+        availableModelsScrollAnimationRef.current = null;
+      }
       batchActionAnimationRef.current?.stop();
       batchActionAnimationRef.current = null;
     },
@@ -642,17 +645,6 @@ export function AuthFilesPage() {
         title={titleNode}
         extra={
           <div className={styles.headerActions}>
-            {files.some((f) => f.type === 'codex' && !f.disabled) && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleCodexCleanup}
-                disabled={disableControls || codexCleaning}
-                loading={codexCleaning}
-              >
-                {t('auth_files.codex_cleanup_button')}
-              </Button>
-            )}
             <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
               {t('common.refresh')}
             </Button>
@@ -766,9 +758,7 @@ export function AuthFilesPage() {
             description={t('auth_files.search_empty_desc')}
           />
         ) : (
-          <div
-            className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}
-          >
+          <div className={styles.fileGrid}>
             {pageItems.map((file) => (
               <AuthFileCard
                 key={file.name}
@@ -778,7 +768,6 @@ export function AuthFilesPage() {
                 disableControls={disableControls}
                 deleting={deleting}
                 statusUpdating={statusUpdating}
-                quotaFilterType={quotaFilterType}
                 keyStats={keyStats}
                 statusBarCache={statusBarCache}
                 onShowModels={showModels}
@@ -848,6 +837,10 @@ export function AuthFilesPage() {
         onDeleteAlias={handleDeleteAlias}
       />
 
+      <div ref={availableModelsRef}>
+        <AvailableModelsCard sectionId="available-models" />
+      </div>
+
       <AuthFileDetailModal
         open={detailModalOpen}
         file={selectedFile}
@@ -876,62 +869,6 @@ export function AuthFilesPage() {
         onSave={handlePrefixProxySave}
         onChange={handlePrefixProxyChange}
       />
-
-      <Modal
-        open={cleanupModalOpen}
-        title={t('auth_files.codex_cleanup_button')}
-        onClose={handleCleanupModalClose}
-        width={560}
-        footer={
-          <Button
-            variant={cleanupDone ? 'primary' : 'danger'}
-            size="sm"
-            onClick={handleCleanupModalClose}
-          >
-            {cleanupDone ? t('common.close') : t('common.cancel')}
-          </Button>
-        }
-      >
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-            <span>
-              {cleanupDone
-                ? t('auth_files.codex_cleanup_log_done', { total: cleanupTotal, deleted: cleanupDeleted })
-                : t('auth_files.codex_cleanup_progress', { current: cleanupCurrent, total: cleanupTotal })}
-            </span>
-            <span>{cleanupTotal > 0 ? `${Math.round((cleanupCurrent / cleanupTotal) * 100)}%` : '0%'}</span>
-          </div>
-          <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'var(--border-color)', overflow: 'hidden' }}>
-            <div
-              style={{
-                width: cleanupTotal > 0 ? `${(cleanupCurrent / cleanupTotal) * 100}%` : '0%',
-                height: '100%',
-                borderRadius: 3,
-                background: cleanupDone ? 'var(--success-color)' : 'var(--primary-color)',
-                transition: 'width 0.3s ease',
-              }}
-            />
-          </div>
-        </div>
-        <div
-          style={{
-            maxHeight: 260,
-            overflowY: 'auto',
-            fontSize: 12,
-            fontFamily: 'monospace',
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            borderRadius: 6,
-            padding: '8px 10px',
-            lineHeight: 1.7,
-          }}
-        >
-          {cleanupLogs.map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
-          <div ref={cleanupLogsEndRef} />
-        </div>
-      </Modal>
 
       {batchActionBarVisible && typeof document !== 'undefined'
         ? createPortal(

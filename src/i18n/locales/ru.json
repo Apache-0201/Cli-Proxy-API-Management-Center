@@ -136,7 +136,21 @@
     "edit_settings": "Изменить настройки",
     "routing_strategy": "Стратегия маршрутизации",
     "available_models": "Доступные модели",
-    "available_models_desc": "Всего моделей от всех провайдеров"
+    "available_models_desc": "Всего моделей от всех провайдеров",
+    "available_models_card_title": "Список доступных моделей",
+    "available_models_card_desc": "Показывает модели из /models и использует API-ключ, сохранённый на сервере, для авторизации.",
+    "available_models_count": "Доступно моделей: {{count}}",
+    "available_models_error": "Не удалось загрузить модели: {{message}}",
+    "available_models_empty": "Нет доступных моделей",
+    "available_models_group_count": "Доступно моделей: {{count}}",
+    "available_models_jump_title": "Открыть список доступных моделей",
+    "available_models_jump_desc": "Перейдите в нижнюю часть страницы auth-файлов, чтобы посмотреть текущий список моделей.",
+    "tutorial_title": "Инструкция по использованию",
+    "tutorial_desc": "Откройте инструкцию по подключению, подготовке auth-файлов и типовым операциям.",
+    "tutorial_stat_value": "Открыть",
+    "tutorial_stat_desc": "Открыть инструкцию",
+    "tutorial_placeholder": "Ссылка на инструкцию пока не настроена. Позже замените константу на нужный URL.",
+    "tutorial_pending": "Не настроено"
   },
   "basic_settings": {
     "title": "Основные настройки",

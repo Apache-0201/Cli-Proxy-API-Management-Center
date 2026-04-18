@@ -137,7 +137,21 @@
     "edit_settings": "Edit Settings",
     "routing_strategy": "Routing Strategy",
     "available_models": "Available Models",
-    "available_models_desc": "Total models from all providers"
+    "available_models_desc": "Total models from all providers",
+    "available_models_card_title": "Available Models",
+    "available_models_card_desc": "Shows models returned by /models and authenticates with the API key stored on the server.",
+    "available_models_count": "{{count}} available models",
+    "available_models_error": "Failed to load models: {{message}}",
+    "available_models_empty": "No available models",
+    "available_models_group_count": "{{count}} available models",
+    "available_models_jump_title": "Open Available Models",
+    "available_models_jump_desc": "Jump to the bottom of Auth Files and inspect the current model list.",
+    "tutorial_title": "Usage Guide",
+    "tutorial_desc": "Open setup notes, auth file preparation steps, and common operation guidance.",
+    "tutorial_stat_value": "Docs",
+    "tutorial_stat_desc": "Open usage guide",
+    "tutorial_placeholder": "Tutorial link is not configured yet. Replace the dashboard constant later.",
+    "tutorial_pending": "Pending"
   },
   "basic_settings": {
     "title": "Basic Settings",

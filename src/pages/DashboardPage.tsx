@@ -1,25 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { IconKey, IconBot, IconFileText, IconSatellite } from '@/components/ui/icons';
+import { IconBookOpen, IconFileText, IconKey, IconSatellite } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
-import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
+import { apiKeysApi, authFilesApi } from '@/services/api';
+import {
+  DASHBOARD_TUTORIAL_URL,
+  getAvailableModelsAnchorPath,
+  normalizeApiKeyList,
+  resolveDashboardTutorialLink,
+} from './dashboardCards';
 import styles from './DashboardPage.module.scss';
 
 interface QuickStat {
   label: string;
   value: number | string;
   icon: React.ReactNode;
-  path: string;
+  path?: string;
+  href?: string | null;
+  disabled?: boolean;
   loading?: boolean;
   sublabel?: string;
-}
-
-interface ProviderStats {
-  gemini: number | null;
-  codex: number | null;
-  claude: number | null;
-  openai: number | null;
 }
 
 export function DashboardPage() {
@@ -28,120 +29,63 @@ export function DashboardPage() {
   const serverBuildDate = useAuthStore((state) => state.serverBuildDate);
   const apiBase = useAuthStore((state) => state.apiBase);
   const config = useConfigStore((state) => state.config);
-
-  const models = useModelsStore((state) => state.models);
-  const modelsLoading = useModelsStore((state) => state.loading);
   const fetchModelsFromStore = useModelsStore((state) => state.fetchModels);
+  const apiKeysCache = useRef<string[]>([]);
 
   const [stats, setStats] = useState<{
     apiKeys: number | null;
     authFiles: number | null;
+    availableModels: number | null;
   }>({
     apiKeys: null,
     authFiles: null,
-  });
-
-  const [providerStats, setProviderStats] = useState<ProviderStats>({
-    gemini: null,
-    codex: null,
-    claude: null,
-    openai: null,
+    availableModels: null,
   });
 
   const [loading, setLoading] = useState(true);
-
-  const apiKeysCache = useRef<string[]>([]);
+  const availableModelsAnchorPath = getAvailableModelsAnchorPath();
+  const tutorialLink = resolveDashboardTutorialLink(DASHBOARD_TUTORIAL_URL);
 
   useEffect(() => {
     apiKeysCache.current = [];
   }, [apiBase, config?.apiKeys]);
 
-  const normalizeApiKeyList = (input: unknown): string[] => {
-    if (!Array.isArray(input)) return [];
-    const seen = new Set<string>();
-    const keys: string[] = [];
-
-    input.forEach((item) => {
-      const record =
-        item !== null && typeof item === 'object' && !Array.isArray(item)
-          ? (item as Record<string, unknown>)
-          : null;
-      const value =
-        typeof item === 'string'
-          ? item
-          : record
-            ? (record['api-key'] ?? record['apiKey'] ?? record.key ?? record.Key)
-            : '';
-      const trimmed = String(value ?? '').trim();
-      if (!trimmed || seen.has(trimmed)) return;
-      seen.add(trimmed);
-      keys.push(trimmed);
-    });
-
-    return keys;
-  };
-
-  const resolveApiKeysForModels = useCallback(async () => {
-    if (apiKeysCache.current.length) {
-      return apiKeysCache.current;
-    }
-
-    const configKeys = normalizeApiKeyList(config?.apiKeys);
-    if (configKeys.length) {
-      apiKeysCache.current = configKeys;
-      return configKeys;
-    }
-
-    try {
-      const list = await apiKeysApi.list();
-      const normalized = normalizeApiKeyList(list);
-      if (normalized.length) {
-        apiKeysCache.current = normalized;
-      }
-      return normalized;
-    } catch {
-      return [];
-    }
-  }, [config?.apiKeys]);
-
-  const fetchModels = useCallback(async () => {
-    if (connectionStatus !== 'connected' || !apiBase) {
-      return;
-    }
-
-    try {
-      const apiKeys = await resolveApiKeysForModels();
-      const primaryKey = apiKeys[0];
-      await fetchModelsFromStore(apiBase, primaryKey);
-    } catch {
-      // Ignore model fetch errors on dashboard
-    }
-  }, [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]);
-
   useEffect(() => {
+    const fetchAvailableModelsCount = async () => {
+      if (connectionStatus !== 'connected' || !apiBase) {
+        return null;
+      }
+
+      if (!apiKeysCache.current.length) {
+        const configKeys = normalizeApiKeyList(config?.apiKeys);
+        if (configKeys.length) {
+          apiKeysCache.current = configKeys;
+        } else {
+          const list = await apiKeysApi.list();
+          apiKeysCache.current = normalizeApiKeyList(list);
+        }
+      }
+
+      const models = await fetchModelsFromStore(apiBase, apiKeysCache.current[0], false);
+      return models.length;
+    };
+
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] =
-          await Promise.allSettled([
-            apiKeysApi.list(),
-            authFilesApi.list(),
-            providersApi.getGeminiKeys(),
-            providersApi.getCodexConfigs(),
-            providersApi.getClaudeConfigs(),
-            providersApi.getOpenAIProviders(),
-          ]);
+        const [keysRes, filesRes, modelsRes] = await Promise.allSettled([
+          apiKeysApi.list(),
+          authFilesApi.list(),
+          fetchAvailableModelsCount(),
+        ]);
 
         setStats({
           apiKeys: keysRes.status === 'fulfilled' ? keysRes.value.length : null,
           authFiles: filesRes.status === 'fulfilled' ? filesRes.value.files.length : null,
-        });
-
-        setProviderStats({
-          gemini: geminiRes.status === 'fulfilled' ? geminiRes.value.length : null,
-          codex: codexRes.status === 'fulfilled' ? codexRes.value.length : null,
-          claude: claudeRes.status === 'fulfilled' ? claudeRes.value.length : null,
-          openai: openaiRes.status === 'fulfilled' ? openaiRes.value.length : null,
+          availableModels:
+            modelsRes.status === 'fulfilled' && typeof modelsRes.value === 'number'
+              ? modelsRes.value
+              : null,
         });
       } finally {
         setLoading(false);
@@ -150,29 +94,10 @@ export function DashboardPage() {
 
     if (connectionStatus === 'connected') {
       fetchStats();
-      fetchModels();
     } else {
       setLoading(false);
     }
-  }, [connectionStatus, fetchModels]);
-
-  // Calculate total provider keys only when all provider stats are available.
-  const providerStatsReady =
-    providerStats.gemini !== null &&
-    providerStats.codex !== null &&
-    providerStats.claude !== null &&
-    providerStats.openai !== null;
-  const hasProviderStats =
-    providerStats.gemini !== null ||
-    providerStats.codex !== null ||
-    providerStats.claude !== null ||
-    providerStats.openai !== null;
-  const totalProviderKeys = providerStatsReady
-    ? (providerStats.gemini ?? 0) +
-      (providerStats.codex ?? 0) +
-      (providerStats.claude ?? 0) +
-      (providerStats.openai ?? 0)
-    : 0;
+  }, [apiBase, config?.apiKeys, connectionStatus, fetchModelsFromStore]);
 
   const quickStats: QuickStat[] = [
     {
@@ -184,21 +109,6 @@ export function DashboardPage() {
       sublabel: t('nav.config_management'),
     },
     {
-      label: t('nav.ai_providers'),
-      value: loading ? '-' : providerStatsReady ? totalProviderKeys : '-',
-      icon: <IconBot size={24} />,
-      path: '/ai-providers',
-      loading: loading,
-      sublabel: hasProviderStats
-        ? t('dashboard.provider_keys_detail', {
-            gemini: providerStats.gemini ?? '-',
-            codex: providerStats.codex ?? '-',
-            claude: providerStats.claude ?? '-',
-            openai: providerStats.openai ?? '-',
-          })
-        : undefined,
-    },
-    {
       label: t('nav.auth_files'),
       value: stats.authFiles ?? '-',
       icon: <IconFileText size={24} />,
@@ -208,11 +118,21 @@ export function DashboardPage() {
     },
     {
       label: t('dashboard.available_models'),
-      value: modelsLoading ? '-' : models.length,
+      value: stats.availableModels ?? '-',
       icon: <IconSatellite size={24} />,
-      path: '/system',
-      loading: modelsLoading,
+      path: availableModelsAnchorPath,
+      loading: loading && stats.availableModels === null,
       sublabel: t('dashboard.available_models_desc'),
+    },
+    {
+      label: t('dashboard.tutorial_title', { defaultValue: '使用教程' }),
+      value: t('dashboard.tutorial_stat_value', { defaultValue: '查看' }),
+      icon: <IconBookOpen size={24} />,
+      href: tutorialLink.href,
+      disabled: tutorialLink.disabled,
+      sublabel: tutorialLink.disabled
+        ? t('dashboard.tutorial_pending', { defaultValue: '待配置' })
+        : t('dashboard.tutorial_stat_desc', { defaultValue: '打开接入说明' }),
     },
   ];
 
@@ -271,18 +191,46 @@ export function DashboardPage() {
       </div>
 
       <div className={styles.statsGrid}>
-        {quickStats.map((stat) => (
-          <Link key={stat.path} to={stat.path} className={styles.statCard}>
-            <div className={styles.statIcon}>{stat.icon}</div>
-            <div className={styles.statContent}>
-              <span className={styles.statValue}>{stat.loading ? '...' : stat.value}</span>
-              <span className={styles.statLabel}>{stat.label}</span>
-              {stat.sublabel && !stat.loading && (
-                <span className={styles.statSublabel}>{stat.sublabel}</span>
-              )}
+        {quickStats.map((stat) => {
+          const content = (
+            <>
+              <div className={styles.statIcon}>{stat.icon}</div>
+              <div className={styles.statContent}>
+                <span className={styles.statValue}>{stat.loading ? '...' : stat.value}</span>
+                <span className={styles.statLabel}>{stat.label}</span>
+                {stat.sublabel && <span className={styles.statSublabel}>{stat.sublabel}</span>}
+              </div>
+            </>
+          );
+
+          if (stat.href && !stat.disabled) {
+            return (
+              <a
+                key={stat.label}
+                href={stat.href}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.statCard}
+              >
+                {content}
+              </a>
+            );
+          }
+
+          if (stat.path && !stat.disabled) {
+            return (
+              <Link key={stat.path} to={stat.path} className={styles.statCard}>
+                {content}
+              </Link>
+            );
+          }
+
+          return (
+            <div key={stat.label} className={`${styles.statCard} ${styles.statCardDisabled}`}>
+              {content}
             </div>
-          </Link>
-        ))}
+          );
+        })}
       </div>
 
       {config && (
