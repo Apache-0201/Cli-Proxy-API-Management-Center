@@ -286,25 +286,24 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
             </div>
           )}
         </div>
-        {isAccountBind && (
-          <div className="form-group">
-            <label htmlFor={authIndexSelectId}>
-              {t('config_management.visual.api_keys.auth_index_label')}
-              {' '}
-              <span style={{ color: 'var(--color-danger, #e53e3e)' }}>*</span>
-            </label>
-            <Select
-              id={authIndexSelectId}
-              value={authIndexValue}
-              options={[
-                { value: '', label: t('config_management.visual.api_keys.auth_index_placeholder') },
-                ...authIndexOptions,
-              ]}
-              disabled={disabled}
-              onChange={(v) => setAuthIndexValue(v)}
-            />
-          </div>
-        )}
+        <div className="form-group">
+          <label htmlFor={authIndexSelectId}>
+            {t('config_management.visual.api_keys.auth_index_label')}
+            {isAccountBind && (
+              <span style={{ color: 'var(--color-danger, #e53e3e)', marginLeft: 2 }}>*</span>
+            )}
+          </label>
+          <Select
+            id={authIndexSelectId}
+            value={authIndexValue}
+            options={[
+              { value: '', label: t('config_management.visual.api_keys.auth_index_placeholder') },
+              ...authIndexOptions,
+            ]}
+            disabled={disabled}
+            onChange={(v) => setAuthIndexValue(v)}
+          />
+        </div>
       </Modal>
     </div>
   );
