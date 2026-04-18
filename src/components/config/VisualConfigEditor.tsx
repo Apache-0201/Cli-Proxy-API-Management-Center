@@ -86,6 +86,20 @@ function Divider() {
   return <div style={{ height: 1, background: 'var(--border-color)', margin: '16px 0' }} />;
 }
 
+/**
+ * 缩短认证文件名用于下拉显示。
+ * 例：codex-cc4b9895-lvcq@ipssi-lyon.com-team.json → codex-lvcq
+ */
+function shortenAuthFileName(name: string): string {
+  let s = name.endsWith('.json') ? name.slice(0, -5) : name;
+  if (s.endsWith('-team')) s = s.slice(0, -5);
+  const atIdx = s.indexOf('@');
+  if (atIdx !== -1) s = s.slice(0, atIdx);
+  const parts = s.split('-').filter(Boolean);
+  if (parts.length <= 2) return s;
+  return `${parts[0]}-${parts[parts.length - 1]}`;
+}
+
 export function VisualConfigEditor({ values, validationErrors, disabled = false, onChange }: VisualConfigEditorProps) {
   const { t } = useTranslation();
   const routingStrategyLabelId = useId();
@@ -105,9 +119,9 @@ export function VisualConfigEditor({ values, validationErrors, disabled = false,
         .map((f) => {
           // API 返回 auth_index（snake_case），类型定义为 authIndex（camelCase），兼容两者
           const idx = f['auth_index'] ?? f.authIndex;
-          return idx != null && String(idx).trim() !== ''
-            ? { value: String(idx), label: `${f.name} (${idx})` }
-            : null;
+          if (idx == null || String(idx).trim() === '') return null;
+          const shortName = shortenAuthFileName(f.name);
+          return { value: String(idx), label: `${shortName} (${idx})` };
         })
         .filter((x): x is { value: string; label: string } => x !== null),
     [authFiles]

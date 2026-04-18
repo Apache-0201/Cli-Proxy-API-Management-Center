@@ -1154,8 +1154,8 @@
           "strategy_fill_first": "Сначала заполнить",
           "strategy_sf": "Последовательное заполнение",
           "strategy_account_bind": "Привязка к аккаунту (Account Bind)",
-          "default_model_account": "Аккаунт модели по умолчанию",
-          "default_model_account_placeholder": "Выберите аккаунт по умолчанию",
+          "default_model_account": "Привязка по умолчанию",
+          "default_model_account_placeholder": "Выберите привязку по умолчанию",
           "force_model_prefix": "Принудительный префикс модели",
           "force_model_prefix_desc": "Запросы к моделям без префикса используют только учётные данные без префикса",
           "ws_auth": "Аутентификация WebSocket",
@@ -1204,11 +1204,11 @@
         "input_hint": "Меняет только содержимое локального файла конфигурации, не синхронизируется с интерфейсом управления API-ключами",
         "error_empty": "Введите API-ключ",
         "error_invalid": "API-ключ содержит недопустимые символы",
-        "error_auth_index_required": "При стратегии account-bind необходимо выбрать аккаунт модели",
+        "error_auth_index_required": "При стратегии account-bind необходимо выбрать привязку",
         "name_label": "Имя",
         "name_placeholder": "Введите имя владельца ключа (необязательно)",
-        "auth_index_label": "Аккаунт модели",
-        "auth_index_placeholder": "Выберите аккаунт модели"
+        "auth_index_label": "Привязка",
+        "auth_index_placeholder": "Выберите привязку"
       },
       "payload_rules": {
         "rule": "Правило",

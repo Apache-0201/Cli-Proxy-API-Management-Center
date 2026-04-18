@@ -1174,8 +1174,8 @@
           "strategy_fill_first": "Fill First",
           "strategy_sf": "Sequential Fill",
           "strategy_account_bind": "Account Bind",
-          "default_model_account": "Default Model Account",
-          "default_model_account_placeholder": "Select default account",
+          "default_model_account": "Default Auth Binding",
+          "default_model_account_placeholder": "Select default auth binding",
           "force_model_prefix": "Force Model Prefix",
           "force_model_prefix_desc": "Unprefixed model requests only use credentials without prefix",
           "ws_auth": "WebSocket Authentication",
@@ -1224,11 +1224,11 @@
         "input_hint": "This only modifies the local config file content, it will not sync to the API Key Management interface",
         "error_empty": "Please enter an API key",
         "error_invalid": "API key contains invalid characters",
-        "error_auth_index_required": "Model account is required for account-bind strategy",
+        "error_auth_index_required": "Auth binding is required for account-bind strategy",
         "name_label": "Name",
         "name_placeholder": "Enter key owner name (optional)",
-        "auth_index_label": "Model Account",
-        "auth_index_placeholder": "Select model account"
+        "auth_index_label": "Auth Binding",
+        "auth_index_placeholder": "Select auth binding"
       },
       "payload_rules": {
         "rule": "Rule",
