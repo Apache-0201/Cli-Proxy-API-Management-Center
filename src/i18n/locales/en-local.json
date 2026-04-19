@@ -138,7 +138,7 @@
       "header_output": "Output",
       "header_total": "Total Tokens",
       "header_cache": "Cache",
-      "header_total_duration": "Total Duration",
+      "header_total_duration": "First Token",
       "header_response_speed": "Speed (tok/s)",
       "header_time": "Time",
       "header_actions": "Actions",

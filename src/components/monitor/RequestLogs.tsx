@@ -41,7 +41,7 @@ interface LogEntry {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
-  totalDurationMs: number;
+  firstTokenLatencyMs: number;
   tokensPerSecond: number;
   successRate: number;
   recentRequests: { failed: boolean; timestamp: number }[];
@@ -132,7 +132,7 @@ export function RequestLogs({
         inputTokens: item.input_tokens || 0,
         outputTokens: item.output_tokens || 0,
         cachedTokens: item.cached_tokens || 0,
-        totalDurationMs: item.total_duration_ms || 0,
+        firstTokenLatencyMs: item.total_duration_ms || 0,
         tokensPerSecond: item.tokens_per_second || 0,
         successRate: item.success_rate || 0,
         recentRequests: (item.recent_requests || []).map((req) => ({
@@ -338,7 +338,9 @@ export function RequestLogs({
         <td className={styles.tokenCell} title={formatNumber(entry.cachedTokens)}>
           {formatCompactTokenNumber(entry.cachedTokens)}
         </td>
-        <td title={`${entry.totalDurationMs} ms`}>{formatDuration(entry.totalDurationMs)}</td>
+        <td title={`${entry.firstTokenLatencyMs} ms`}>
+          {formatDuration(entry.firstTokenLatencyMs)}
+        </td>
         <td>{formatTokPerSec(entry.tokensPerSecond)}</td>
         <td>{formatTimestamp(entry.timestamp)}</td>
         <td>

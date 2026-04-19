@@ -138,7 +138,7 @@
       "header_output": "输出",
       "header_total": "总 Token",
       "header_cache": "缓存",
-      "header_total_duration": "总耗时",
+      "header_total_duration": "首字耗时",
       "header_response_speed": "tok/s",
       "header_time": "时间",
       "header_actions": "操作",
