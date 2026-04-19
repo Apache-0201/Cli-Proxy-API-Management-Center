@@ -51,6 +51,7 @@ export interface MonitorRequestLogItem {
   request_count: number;
   success_rate: number;
   total_duration_ms: number;
+  tokens_per_second: number;
   recent_requests: MonitorRecentRequest[];
 }
 

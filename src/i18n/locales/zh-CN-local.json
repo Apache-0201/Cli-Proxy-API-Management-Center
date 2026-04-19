@@ -139,7 +139,7 @@
       "header_total": "总 Token",
       "header_cache": "缓存",
       "header_total_duration": "总耗时",
-      "header_response_speed": "响应速度(tok/s)",
+      "header_response_speed": "tok/s",
       "header_time": "时间",
       "header_actions": "操作",
       "showing": "显示 {{start}}-{{end}} 条，共 {{total}} 条",

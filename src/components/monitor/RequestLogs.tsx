@@ -42,6 +42,7 @@ interface LogEntry {
   outputTokens: number;
   cachedTokens: number;
   totalDurationMs: number;
+  tokensPerSecond: number;
   successRate: number;
   recentRequests: { failed: boolean; timestamp: number }[];
   authIndex: string;
@@ -132,6 +133,7 @@ export function RequestLogs({
         outputTokens: item.output_tokens || 0,
         cachedTokens: item.cached_tokens || 0,
         totalDurationMs: item.total_duration_ms || 0,
+        tokensPerSecond: item.tokens_per_second || 0,
         successRate: item.success_rate || 0,
         recentRequests: (item.recent_requests || []).map((req) => ({
           failed: !!req.failed,
@@ -268,9 +270,8 @@ export function RequestLogs({
     return `${seconds.toFixed(1)}s`;
   };
 
-  const formatTokPerSec = (outputTokens: number, durationMs: number) => {
-    if (!durationMs || durationMs <= 0 || !outputTokens || outputTokens <= 0) return '-';
-    const tps = outputTokens / (durationMs / 1000);
+  const formatTokPerSec = (tps: number) => {
+    if (!tps || tps <= 0) return '-';
     return tps.toFixed(1);
   };
 
@@ -338,7 +339,7 @@ export function RequestLogs({
           {formatCompactTokenNumber(entry.cachedTokens)}
         </td>
         <td title={`${entry.totalDurationMs} ms`}>{formatDuration(entry.totalDurationMs)}</td>
-        <td>{formatTokPerSec(entry.outputTokens, entry.totalDurationMs)}</td>
+        <td>{formatTokPerSec(entry.tokensPerSecond)}</td>
         <td>{formatTimestamp(entry.timestamp)}</td>
         <td>
           {entry.source && entry.source !== '-' && entry.source !== 'unknown' ? (
