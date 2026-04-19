@@ -55,15 +55,34 @@ function extractApiKeyAuthIndex(raw: unknown): string | undefined {
   return undefined;
 }
 
-function parseApiKeyEntries(raw: unknown): { key: string; name: string; authIndex?: string }[] {
+function extractApiKeyAuthIdentity(raw: unknown): string | undefined {
+  const record = asRecord(raw);
+  if (!record) return undefined;
+  const identity = record['auth_identity'] ?? record['authIdentity'] ?? record['auth-identity'];
+  if (typeof identity === 'string') {
+    const trimmed = identity.trim();
+    return trimmed || undefined;
+  }
+  return undefined;
+}
+
+function parseApiKeyEntries(
+  raw: unknown
+): { key: string; name: string; authIndex?: string; authIdentity?: string }[] {
   if (!Array.isArray(raw)) return [];
 
-  const entries: { key: string; name: string; authIndex?: string }[] = [];
+  const entries: { key: string; name: string; authIndex?: string; authIdentity?: string }[] = [];
   for (const item of raw) {
     const key = extractApiKeyValue(item);
     if (key) {
       const authIndex = extractApiKeyAuthIndex(item);
-      entries.push({ key, name: extractApiKeyName(item), ...(authIndex ? { authIndex } : {}) });
+      const authIdentity = extractApiKeyAuthIdentity(item);
+      entries.push({
+        key,
+        name: extractApiKeyName(item),
+        ...(authIndex ? { authIndex } : {}),
+        ...(authIdentity ? { authIdentity } : {}),
+      });
     }
   }
   return entries;
@@ -81,29 +100,50 @@ function replaceApiKeyValue(entry: unknown, apiKey: string): unknown {
   return { ...record, 'api-key': apiKey };
 }
 
+function withoutApiKeyAuthBindingFields(record: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...record };
+  delete next.auth_index;
+  delete next.authIndex;
+  delete next['auth-index'];
+  delete next.auth_identity;
+  delete next.authIdentity;
+  delete next['auth-identity'];
+  return next;
+}
+
 function buildApiKeyEntries(
   entries: ProxyApiKeyEntry[],
   metadata: ApiKeysStorageMetadata
 ): Array<string | Record<string, unknown>> {
-  return entries.map(({ key, name, authIndex }, index) => {
+  return entries.map(({ key, name, authIndex, authIdentity }, index) => {
     const originalEntry = metadata.originalEntries[index];
     const nameObj = name.trim() ? { name: name.trim() } : {};
     const authIndexObj = authIndex?.trim() ? { auth_index: authIndex.trim() } : {};
+    const authIdentityObj = authIdentity?.trim() ? { auth_identity: authIdentity.trim() } : {};
     const hasName = name.trim().length > 0;
     const hasAuthIndex = Boolean(authIndex?.trim());
+    const hasAuthIdentity = Boolean(authIdentity?.trim());
 
-    if (metadata.entryMode === 'object' || hasName || hasAuthIndex) {
+    if (metadata.entryMode === 'object' || hasName || hasAuthIndex || hasAuthIdentity) {
       const replaced = replaceApiKeyValue(originalEntry, key);
-      return { ...(asRecord(replaced) ?? { 'api-key': key }), ...nameObj, ...authIndexObj };
+      const base = withoutApiKeyAuthBindingFields(asRecord(replaced) ?? { 'api-key': key });
+      return {
+        ...base,
+        ...nameObj,
+        ...authIndexObj,
+        ...authIdentityObj,
+      };
     }
 
     const record = asRecord(originalEntry);
-    return record ? ({ ...record, ...(replaceApiKeyValue(record, key) as Record<string, unknown>) }) : key;
+    return record
+      ? { ...record, ...(replaceApiKeyValue(record, key) as Record<string, unknown>) }
+      : key;
   });
 }
 
 function resolveApiKeysStorage(parsed: Record<string, unknown>): {
-  entries: { key: string; name: string }[];
+  entries: { key: string; name: string; authIndex?: string; authIdentity?: string }[];
   metadata: ApiKeysStorageMetadata;
 } {
   const legacyEntries = Array.isArray(parsed['api-keys']) ? parsed['api-keys'] : [];
@@ -127,7 +167,8 @@ function resolveApiKeysStorage(parsed: Record<string, unknown>): {
         source: 'auth-provider',
         providerListKey,
         entryMode:
-          providerListKey === 'api-key-entries' || providerEntries.some((entry) => Boolean(asRecord(entry)))
+          providerListKey === 'api-key-entries' ||
+          providerEntries.some((entry) => Boolean(asRecord(entry)))
             ? 'object'
             : 'string',
         originalEntries: providerEntries,
@@ -306,7 +347,9 @@ export function getPayloadParamValidationError(
 }
 
 function hasPayloadParamValidationErrors(rules: PayloadRule[]): boolean {
-  return rules.some((rule) => rule.params.some((param) => Boolean(getPayloadParamValidationError(param))));
+  return rules.some((rule) =>
+    rule.params.some((param) => Boolean(getPayloadParamValidationError(param)))
+  );
 }
 
 function deepClone<T>(value: T): T {
@@ -484,8 +527,9 @@ export function useVisualConfig() {
     ...DEFAULT_VISUAL_VALUES,
   });
   const [visualParseError, setVisualParseError] = useState<string | null>(null);
-  const [apiKeysStorageMetadata, setApiKeysStorageMetadata] =
-    useState<ApiKeysStorageMetadata>(DEFAULT_API_KEYS_STORAGE_METADATA);
+  const [apiKeysStorageMetadata, setApiKeysStorageMetadata] = useState<ApiKeysStorageMetadata>(
+    DEFAULT_API_KEYS_STORAGE_METADATA
+  );
   const visualValidationErrors = useMemo(
     () => getVisualConfigValidationErrors(visualValues),
     [visualValues]
@@ -528,7 +572,9 @@ export function useVisualConfig() {
 
         rmAllowRemote: Boolean(remoteManagement?.['allow-remote']),
         rmSecretKey:
-          typeof remoteManagement?.['secret-key'] === 'string' ? remoteManagement['secret-key'] : '',
+          typeof remoteManagement?.['secret-key'] === 'string'
+            ? remoteManagement['secret-key']
+            : '',
         rmDisableControlPanel: Boolean(remoteManagement?.['disable-control-panel']),
         rmPanelRepo:
           typeof remoteManagement?.['panel-github-repository'] === 'string'
@@ -553,9 +599,7 @@ export function useVisualConfig() {
         wsAuth: Boolean(parsed['ws-auth']),
 
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
-        quotaSwitchPreviewModel: Boolean(
-          quotaExceeded?.['switch-preview-model'] ?? true
-        ),
+        quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
 
         routingStrategy:
           routing?.strategy === 'fill-first'
@@ -643,8 +687,24 @@ export function useVisualConfig() {
         }
 
         setStringInDoc(doc, ['auth-dir'], values.authDir);
-        if (JSON.stringify(values.apiKeyEntries.map(({ key, name, authIndex }) => ({ key, name, authIndex }))) !==
-            JSON.stringify(baselineValues.apiKeyEntries.map(({ key, name, authIndex }) => ({ key, name, authIndex })))) {
+        if (
+          JSON.stringify(
+            values.apiKeyEntries.map(({ key, name, authIndex, authIdentity }) => ({
+              key,
+              name,
+              authIndex,
+              authIdentity,
+            }))
+          ) !==
+          JSON.stringify(
+            baselineValues.apiKeyEntries.map(({ key, name, authIndex, authIdentity }) => ({
+              key,
+              name,
+              authIndex,
+              authIdentity,
+            }))
+          )
+        ) {
           const builtEntries = buildApiKeyEntries(values.apiKeyEntries, apiKeysStorageMetadata);
           const keyCount = values.apiKeyEntries.length;
           const legacyKeys = values.apiKeyEntries.map((e) => e.key);
@@ -701,10 +761,7 @@ export function useVisualConfig() {
         ) {
           ensureMapInDoc(doc, ['quota-exceeded']);
           doc.setIn(['quota-exceeded', 'switch-project'], values.quotaSwitchProject);
-          doc.setIn(
-            ['quota-exceeded', 'switch-preview-model'],
-            values.quotaSwitchPreviewModel
-          );
+          doc.setIn(['quota-exceeded', 'switch-preview-model'], values.quotaSwitchPreviewModel);
           deleteIfMapEmpty(doc, ['quota-exceeded']);
         }
 
@@ -720,9 +777,13 @@ export function useVisualConfig() {
         }
 
         const keepaliveSeconds =
-          typeof values.streaming?.keepaliveSeconds === 'string' ? values.streaming.keepaliveSeconds : '';
+          typeof values.streaming?.keepaliveSeconds === 'string'
+            ? values.streaming.keepaliveSeconds
+            : '';
         const bootstrapRetries =
-          typeof values.streaming?.bootstrapRetries === 'string' ? values.streaming.bootstrapRetries : '';
+          typeof values.streaming?.bootstrapRetries === 'string'
+            ? values.streaming.bootstrapRetries
+            : '';
         const nonstreamKeepaliveInterval =
           typeof values.streaming?.nonstreamKeepaliveInterval === 'string'
             ? values.streaming.nonstreamKeepaliveInterval
@@ -737,11 +798,7 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['streaming']);
         }
 
-        setIntFromStringInDoc(
-          doc,
-          ['nonstream-keepalive-interval'],
-          nonstreamKeepaliveInterval
-        );
+        setIntFromStringInDoc(doc, ['nonstream-keepalive-interval'], nonstreamKeepaliveInterval);
 
         if (
           docHas(doc, ['payload']) ||

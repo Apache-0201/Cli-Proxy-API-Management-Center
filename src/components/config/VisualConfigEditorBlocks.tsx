@@ -7,6 +7,7 @@ import { useNotificationStore } from '@/stores';
 import styles from './VisualConfigEditor.module.scss';
 import { copyToClipboard } from '@/utils/clipboard';
 import type {
+  AuthBindingOption,
   ProxyApiKeyEntry,
   PayloadFilterRule,
   PayloadModelEntry,
@@ -44,7 +45,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   disabled?: boolean;
   onChange: (nextValue: ProxyApiKeyEntry[]) => void;
   isAccountBind?: boolean;
-  authIndexOptions?: { value: string; label: string }[];
+  authIndexOptions?: AuthBindingOption[];
   defaultModelAccount?: string;
 }) {
   const { t } = useTranslation();
@@ -62,6 +63,38 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   const [authIndexValue, setAuthIndexValue] = useState('');
   const [formError, setFormError] = useState('');
 
+  const resolveBindingValue = (entry?: ProxyApiKeyEntry) => {
+    const configured =
+      entry?.authIdentity?.trim() || entry?.authIndex?.trim() || defaultModelAccount;
+    if (!configured) return '';
+    const option = authIndexOptions.find(
+      (item) =>
+        item.value === configured ||
+        item.authIndex === configured ||
+        item.authIdentity === configured
+    );
+    return option?.value ?? configured;
+  };
+
+  const resolveSelectedBinding = (
+    value: string
+  ): Pick<ProxyApiKeyEntry, 'authIndex' | 'authIdentity'> => {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+    const option = authIndexOptions.find(
+      (item) =>
+        item.value === trimmed || item.authIndex === trimmed || item.authIdentity === trimmed
+    );
+    if (option) {
+      return {
+        ...(option.authIndex ? { authIndex: option.authIndex } : {}),
+        ...(option.authIdentity ? { authIdentity: option.authIdentity } : {}),
+      };
+    }
+    if (trimmed.includes(':')) return { authIdentity: trimmed };
+    return { authIndex: trimmed };
+  };
+
   function generateSecureApiKey(): string {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const array = new Uint8Array(17);
@@ -73,7 +106,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     setEditingEntryId(null);
     setKeyInputValue('');
     setNameInputValue('');
-    setAuthIndexValue(defaultModelAccount);
+    setAuthIndexValue(resolveBindingValue());
     setFormError('');
     setModalOpen(true);
   };
@@ -83,7 +116,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     setEditingEntryId(entryId);
     setKeyInputValue(entry?.key ?? '');
     setNameInputValue(entry?.name ?? '');
-    setAuthIndexValue(entry?.authIndex ?? defaultModelAccount);
+    setAuthIndexValue(resolveBindingValue(entry));
     setFormError('');
     setModalOpen(true);
   };
@@ -119,11 +152,12 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     }
 
     const trimmedName = nameInputValue.trim();
+    const selectedBinding = resolveSelectedBinding(trimmedAuthIndex);
     const newEntry: ProxyApiKeyEntry = {
       id: makeClientId(),
       key: trimmedKey,
       name: trimmedName,
-      ...(trimmedAuthIndex ? { authIndex: trimmedAuthIndex } : {}),
+      ...selectedBinding,
     };
 
     if (editingEntryId === null) {
@@ -132,7 +166,14 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       onChange(
         value.map((e) =>
           e.id === editingEntryId
-            ? { ...e, key: trimmedKey, name: trimmedName, authIndex: trimmedAuthIndex || undefined }
+            ? {
+                ...e,
+                key: trimmedKey,
+                name: trimmedName,
+                authIndex: undefined,
+                authIdentity: undefined,
+                ...selectedBinding,
+              }
             : e
         )
       );

@@ -87,6 +87,14 @@ export type ProxyApiKeyEntry = {
   key: string;
   name: string;
   authIndex?: string;
+  authIdentity?: string;
+};
+
+export type AuthBindingOption = {
+  value: string;
+  label: string;
+  authIndex?: string;
+  authIdentity?: string;
 };
 
 export const makeClientId = () => {
