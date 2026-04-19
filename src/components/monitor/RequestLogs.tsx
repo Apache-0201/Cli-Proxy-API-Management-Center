@@ -25,7 +25,6 @@ interface RequestLogsProps {
   providerMap: Record<string, string>;
   providerTypeMap: Record<string, string>;
   apiFilter: string;
-  authIndexMap: Record<string, string>;
   apiKeyNameMap?: Record<string, string>;
 }
 
@@ -57,7 +56,6 @@ export function RequestLogs({
   providerMap,
   providerTypeMap,
   apiFilter,
-  authIndexMap,
   apiKeyNameMap = {},
 }: RequestLogsProps) {
   const { t } = useTranslation();
@@ -288,10 +286,7 @@ export function RequestLogs({
 
   const renderRow = (entry: LogEntry) => {
     const disabled = isModelDisabled(entry.source, entry.model);
-    // 将 authIndex 映射为文件名
-    const authDisplayName = entry.authIndex
-      ? authIndexMap[entry.authIndex] || entry.authIndex
-      : '-';
+    const authDisplayName = entry.authIndex || '-';
 
     const apiKeyName = apiKeyNameMap[entry.apiKey];
 
