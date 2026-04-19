@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card } from '@/components/ui/Card';
@@ -36,13 +36,12 @@ interface LogEntry {
   model: string;
   source: string;
   providerName: string | null;
-  providerType: string;
   maskedKey: string;
   failed: boolean;
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
-  requestCount: number;
+  totalDurationMs: number;
   successRate: number;
   recentRequests: { failed: boolean; timestamp: number }[];
   authIndex: string;
@@ -63,7 +62,6 @@ export function RequestLogs({
   const [filterModel, setFilterModel] = useState('');
   const [filterSource, setFilterSource] = useState('');
   const [filterStatus, setFilterStatus] = useState<'' | 'success' | 'failed'>('');
-  const [filterProviderType, setFilterProviderType] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(10);
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -128,13 +126,12 @@ export function RequestLogs({
         model: item.model,
         source,
         providerName: provider,
-        providerType: providerTypeMap[source] || '--',
         maskedKey: masked,
         failed: item.failed,
         inputTokens: item.input_tokens || 0,
         outputTokens: item.output_tokens || 0,
         cachedTokens: item.cached_tokens || 0,
-        requestCount: item.request_count || 0,
+        totalDurationMs: item.total_duration_ms || 0,
         successRate: item.success_rate || 0,
         recentRequests: (item.recent_requests || []).map((req) => ({
           failed: !!req.failed,
@@ -143,7 +140,7 @@ export function RequestLogs({
         authIndex: item.auth_index || '',
       };
     },
-    [providerMap, providerTypeMap]
+    [providerMap]
   );
 
   // 独立获取日志数据
@@ -236,26 +233,8 @@ export function RequestLogs({
     fetchLogData();
   }, [fetchLogData, refreshKey]);
 
-  const providerTypes = useMemo(() => {
-    const typeSet = new Set<string>();
-    filterOptions.sources.forEach((source) => {
-      const providerType = providerTypeMap[source];
-      if (providerType && providerType !== '--') {
-        typeSet.add(providerType);
-      }
-    });
-    return Array.from(typeSet).sort();
-  }, [filterOptions.sources, providerTypeMap]);
-
-  const filteredEntries = useMemo(() => {
-    if (!filterProviderType) {
-      return logEntries;
-    }
-    return logEntries.filter((entry) => entry.providerType === filterProviderType);
-  }, [logEntries, filterProviderType]);
-
   const rowVirtualizer = useVirtualizer({
-    count: filteredEntries.length,
+    count: logEntries.length,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -277,6 +256,23 @@ export function RequestLogs({
   };
 
   const formatNumber = (num: number) => num.toLocaleString('zh-CN');
+
+  const formatDuration = (ms: number) => {
+    if (!ms || ms <= 0) return '-';
+    const seconds = ms / 1000;
+    if (seconds >= 60) {
+      const minutes = Math.floor(seconds / 60);
+      const remainSec = seconds - minutes * 60;
+      return `${minutes}m${remainSec.toFixed(1)}s`;
+    }
+    return `${seconds.toFixed(1)}s`;
+  };
+
+  const formatTokPerSec = (outputTokens: number, durationMs: number) => {
+    if (!durationMs || durationMs <= 0 || !outputTokens || outputTokens <= 0) return '-';
+    const tps = outputTokens / (durationMs / 1000);
+    return tps.toFixed(1);
+  };
 
   const goToPage = (nextPage: number) => {
     if (nextPage < 1) return;
@@ -303,7 +299,6 @@ export function RequestLogs({
             maskSecret(entry.apiKey)
           )}
         </td>
-        <td>{entry.providerType}</td>
         <td title={entry.model}>{entry.model}</td>
         <td title={entry.source}>
           {entry.providerName ? (
@@ -333,7 +328,6 @@ export function RequestLogs({
         <td className={getRateClassName(entry.successRate, styles)}>
           {entry.successRate.toFixed(1)}%
         </td>
-        <td>{formatNumber(entry.requestCount)}</td>
         <td className={styles.tokenCell} title={formatNumber(entry.inputTokens)}>
           {formatCompactTokenNumber(entry.inputTokens)}
         </td>
@@ -343,6 +337,8 @@ export function RequestLogs({
         <td className={styles.tokenCell} title={formatNumber(entry.cachedTokens)}>
           {formatCompactTokenNumber(entry.cachedTokens)}
         </td>
+        <td title={`${entry.totalDurationMs} ms`}>{formatDuration(entry.totalDurationMs)}</td>
+        <td>{formatTokPerSec(entry.outputTokens, entry.totalDurationMs)}</td>
         <td>{formatTimestamp(entry.timestamp)}</td>
         <td>
           {entry.source && entry.source !== '-' && entry.source !== 'unknown' ? (
@@ -403,18 +399,6 @@ export function RequestLogs({
             {filterOptions.apis.map((api) => (
               <option key={api} value={api}>
                 {maskSecret(api)}
-              </option>
-            ))}
-          </select>
-          <select
-            className={styles.logSelect}
-            value={filterProviderType}
-            onChange={(e) => setFilterProviderType(e.target.value)}
-          >
-            <option value="">{t('monitor.logs.all_provider_types')}</option>
-            {providerTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
               </option>
             ))}
           </select>
@@ -493,7 +477,7 @@ export function RequestLogs({
         <div className={styles.tableWrapper}>
           {showLoading ? (
             <div className={styles.emptyState}>{t('common.loading')}</div>
-          ) : filteredEntries.length === 0 ? (
+          ) : logEntries.length === 0 ? (
             <div className={styles.emptyState}>{t('monitor.no_data')}</div>
           ) : (
             <>
@@ -503,16 +487,16 @@ export function RequestLogs({
                     <tr>
                       <th>{t('monitor.logs.header_auth')}</th>
                       <th>{t('monitor.logs.header_api')}</th>
-                      <th>{t('monitor.logs.header_request_type')}</th>
                       <th>{t('monitor.logs.header_model')}</th>
                       <th>{t('monitor.logs.header_source')}</th>
                       <th>{t('monitor.logs.header_status')}</th>
                       <th>{t('monitor.logs.header_recent')}</th>
                       <th>{t('monitor.logs.header_rate')}</th>
-                      <th>{t('monitor.logs.header_count')}</th>
                       <th>{t('monitor.logs.header_input')}</th>
                       <th>{t('monitor.logs.header_output')}</th>
                       <th>{t('monitor.logs.header_cache')}</th>
+                      <th>{t('monitor.logs.header_total_duration')}</th>
+                      <th>{t('monitor.logs.header_response_speed')}</th>
                       <th>{t('monitor.logs.header_time')}</th>
                       <th>{t('monitor.logs.header_actions')}</th>
                     </tr>
@@ -540,7 +524,7 @@ export function RequestLogs({
                   <table className={`${styles.table} ${styles.virtualTable}`}>
                     <tbody>
                       {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        const entry = filteredEntries[virtualRow.index];
+                        const entry = logEntries[virtualRow.index];
                         return (
                           <tr
                             key={entry.id}
@@ -599,7 +583,7 @@ export function RequestLogs({
           </div>
         )}
 
-        {filteredEntries.length > 0 && (
+        {logEntries.length > 0 && (
           <div
             style={{
               textAlign: 'center',
